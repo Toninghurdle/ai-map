@@ -26,11 +26,11 @@ export async function ProblemIndex() {
       {/* The Show and Hide words come from a ::after pseudo-element in
           globals.css, matching the reference (packages/fieldmap/src/fieldmap.css,
           ".index > summary::after"). Pseudo-element text is not part of the
-          accessible name, so a screen reader reads a stable "Every problem"
-          while the browser announces the open state from <details> itself,
-          rather than the name changing under the reader as it is operated. */}
+          accessible name, so the name stays "Every problem, as a list"
+          however the control is operated, and the browser announces the open
+          state from <details> itself. */}
       <summary className="fm-index-summary">
-        <h2 className="fm-index-heading">Every problem</h2>
+        <h2 className="fm-index-heading">Every problem, as a list</h2>
       </summary>
       {data.layers.map((layer) => (
         <section key={layer.slug} className="fm-index-layer">
