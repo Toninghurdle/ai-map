@@ -44,7 +44,12 @@ export default async function MapLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <main className="fm-page">
+    // Both classes: "fm-page" is the site's own, "page" is what the ported
+    // stylesheet's phone rule targets (packages/fieldmap/src/fieldmap.css,
+    // "body.map-stack.has-panel .page"), which leaves room to scroll the map
+    // clear of the bottom sheet. Without it that rule is dead and the page is
+    // ~880px too short on a phone.
+    <main className="fm-page page">
       {/* First focusable thing on the page, so the map is one press away
           (docs/design/design-qa-fixes.md F9). */}
       <SkipToMap />
