@@ -89,7 +89,11 @@ button {
   gap: 16px;
 }
 
-.fm-title h1 {
+/* The class is on the h1 itself, not a wrapper: ".fm-title h1" matched
+   nothing, which is how the title came to carry inline sizes. Same values as
+   the module's own bare h1 rule (packages/fieldmap/src/fieldmap.css), so the
+   site and the reference size the title identically. */
+.fm-title {
   margin: 0;
   font-weight: 700;
   font-size: clamp(30px, 4.3vw, 56px);
@@ -98,7 +102,12 @@ button {
   text-wrap: balance;
 }
 
-.fm-title h1 .fm-title-sub {
+.fm-title .fm-title-lead {
+  display: block;
+  font-weight: 700;
+}
+
+.fm-title .fm-title-sub {
   display: block;
   font-weight: 400;
 }

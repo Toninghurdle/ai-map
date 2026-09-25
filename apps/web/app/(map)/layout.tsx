@@ -77,13 +77,13 @@ export default function MapLayout({ children }: { children: React.ReactNode }) {
 
       <div className="fm-title-block fm-title-row">
         <div>
+          {/* No inline font sizes: the size comes from .fm-title in
+              globals.css, clamp(30px, 4.3vw, 56px), matching
+              docs/design/02-tokens.md's "Page title" rows. The first line
+              is 700, "Field Map" 400 on its own line. */}
           <h1 className="fm-title">
-            <span style={{ display: "block", fontWeight: 700, fontSize: "1.6rem" }}>
-              AI Safety and Security
-            </span>
-            <span className="fm-title-sub" style={{ fontSize: "1.6rem" }}>
-              Field Map
-            </span>
+            <span className="fm-title-lead">AI Safety and Security</span>
+            <span className="fm-title-sub">Field Map</span>
           </h1>
           <p className="fm-lede lede">{LEDE}</p>
           <p className="fm-meta" id="meta" />
