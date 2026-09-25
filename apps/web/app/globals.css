@@ -127,23 +127,70 @@ button {
   padding-bottom: 18px;
 }
 
-.fm-porting-note {
-  margin: 22px 0 0;
+/* Shown inside the chart's map area when the map data can't be loaded
+   (components/FieldMapMount.tsx). Ink on the cream frame token, which stays
+   light in both themes, same as name tags in docs/design/04-interaction.md,
+   so it reads whatever the sea colour behind it is doing. */
+.fm-map-error {
+  color: #16181a;
+  background: var(--fm-frame);
+  border: 1px solid var(--fm-frame-edge);
+  border-radius: 2px;
   font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--fm-ink-2);
-  font-style: italic;
+  max-width: 40ch;
+  text-align: center;
+  padding: 10px 16px;
+  margin: 0;
 }
 
-/* The server-rendered index of every problem (docs/design/03-map.md, 07-integration-and-checks.md). */
+/* The server-rendered index of every problem (docs/design/03-map.md, item 5,
+   "Every problem, as a list"; 07-integration-and-checks.md "The list of
+   every problem"). A closed <details> under the chart. */
 .fm-index {
-  margin-top: 34px;
+  margin-top: 28px;
+}
+
+.fm-index-summary {
+  cursor: pointer;
+  padding: 12px 0;
+  border-top: 2px solid var(--fm-ink);
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fm-index-summary::-webkit-details-marker {
+  display: none;
 }
 
 .fm-index-heading {
+  margin: 0;
   font-size: 17px;
   font-weight: 600;
-  margin: 0 0 18px;
+  display: inline;
+}
+
+/* Show and Hide sit in a pseudo-element so they stay out of the summary's
+   accessible name, which keeps the name stable as the block is opened and
+   closed. The <details> element announces its own state. Matches the
+   reference implementation, packages/fieldmap/src/fieldmap.css. */
+.fm-index-summary::after {
+  content: "Show";
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--fm-ink-3);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fm-index[open] .fm-index-summary::after {
+  content: "Hide";
+}
+
+.fm-index[open] .fm-index-summary {
+  margin-bottom: 18px;
 }
 
 .fm-index-layer {

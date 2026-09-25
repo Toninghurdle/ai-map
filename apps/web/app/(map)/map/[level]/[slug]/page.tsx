@@ -15,9 +15,11 @@ function isMapLevel(value: string): value is FieldMapLevel {
  * "Robustness": it falls back to the whole map, never throws).
  *
  * Renders nothing itself: the chart markup and FieldMapMount both live in
- * ../layout.tsx (shared with /map), which reads the current level and
- * slug from the URL rather than from this page's params, so the map isn't
- * unmounted and remounted (and refetched) when moving between levels.
+ * the shared route group layout at app/(map)/layout.tsx (also used by "/",
+ * the whole map), which reads the current level and slug from the URL
+ * rather than from this page's params, so the map isn't unmounted and
+ * remounted (and refetched) when moving between "/" and a level, or
+ * between levels.
  *
  * Old slugs: node_aliases redirects are the router's job (07's "Old
  * slugs"), not handled here yet; out of scope for this task.

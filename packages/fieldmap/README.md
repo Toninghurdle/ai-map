@@ -32,10 +32,13 @@ for how it gets its data.
 
 ## How it's mounted
 
-`apps/web/app/map/layout.tsx` renders the chart markup (the element IDs
+`apps/web/app/(map)/layout.tsx` renders the chart markup (the element IDs
 the script expects) and `apps/web/components/FieldMapMount.tsx` once,
-shared by `/map` and `/map/[level]/[slug]` so the map isn't unmounted and
-remounted (and refetched) when the reader moves between levels.
+shared by `/` (the whole map) and `/map/[level]/[slug]` so the map isn't
+unmounted and remounted (and refetched) when the reader moves between
+levels. The two routes share this one layout because they sit in the same
+route group, `app/(map)/`; a plain `/map` now redirects permanently to `/`
+(`apps/web/app/map/page.tsx`).
 `apps/web/scripts/copy-fieldmap.mjs` (run by `predev` and `prebuild`)
 copies `src/fieldmap.js` and `src/fieldmap.css` into `apps/web/public`
 with a content-hashed filename, recorded in `apps/web/fieldmap-manifest.json`,
@@ -56,10 +59,11 @@ gets a new URL rather than serving a browser's cached script.
    metrics rather than a fallback font (see `07-integration-and-checks.md`,
    "Font").
 5. Listens for `fieldmap:navigate` on `document` and mirrors
-   `{level, slug}` into `/map/<level>/<slug>`: a change of `level` uses
-   `router.push` (so Back walks up the map one level at a time), and a
-   change of `slug` at the same level uses `router.replace` (so browsing
-   problem to problem doesn't fill history with one entry per hex). Calls
+   `{level, slug}` into the URL: the whole map writes `/`, any other level
+   writes `/map/<level>/<slug>`. A change of `level` uses `router.push` (so
+   Back walks up the map one level at a time), and a change of `slug` at
+   the same level uses `router.replace` (so browsing problem to problem
+   doesn't fill history with one entry per hex). Calls
    `FieldMap.open(level, slug)` on the way back in when the site's own
    links or the browser's back and forward buttons change the route.
 6. Renders the site's own side panel (`05-panels-and-pages.md`) from

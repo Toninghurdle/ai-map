@@ -16,9 +16,12 @@ const SCRIPT_SRC = `/${fieldmapManifest.js}`;
 const SCRIPT_ID = "fieldmap-script";
 const LEVELS: FieldMapLevel[] = ["layer", "area", "node", "org"];
 
-/** Reads the current level and slug from a /map... pathname. */
+/**
+ * Reads the current level and slug from the pathname: "/" is the whole map
+ * (overview), "/map/<level>/<slug>" is one of the four other levels.
+ */
 function levelAndSlugFromPathname(pathname: string): { level: FieldMapLevel; slug: string | null } {
-  const parts = pathname.split("/").filter(Boolean); // ["map", level, slug] or ["map"]
+  const parts = pathname.split("/").filter(Boolean); // ["map", level, slug] or [] for "/"
   const level = parts[1];
   const slug = parts[2];
   if (level && (LEVELS as string[]).includes(level) && slug) {
@@ -32,13 +35,14 @@ function levelAndSlugFromPathname(pathname: string): { level: FieldMapLevel; slu
  * following the six steps in packages/fieldmap/README.md and the contract
  * in docs/design/07-integration-and-checks.md.
  *
- * Rendered once in app/map/layout.tsx, not in the per-level page
- * components, so navigating between /map and /map/[level]/[slug] doesn't
- * unmount and remount it: the script, the fetched data and the built
- * model (118 nodes) are loaded once per page load, and level/slug changes
- * are read reactively from the URL instead of the component's own props
- * (a review finding: rendering this per-page caused a full re-fetch and
- * re-setData on every level change).
+ * Rendered once in app/(map)/layout.tsx, the layout shared by "/" (the
+ * whole map) and /map/[level]/[slug], not in the per-route page
+ * components, so navigating between "/" and a level, or between levels,
+ * doesn't unmount and remount it: the script, the fetched data and the
+ * built model (118 nodes) are loaded once per page load, and level/slug
+ * changes are read reactively from the URL instead of the component's own
+ * props (a review finding: rendering this per-page caused a full re-fetch
+ * and re-setData on every level change).
  *
  * The site owns routing (`hash: false`) and its own panel (`panel: false`,
  * task 3), so this component only wires FieldMap.open <-> the URL. It does
@@ -78,7 +82,7 @@ export function FieldMapMount() {
         const wrap = document.getElementById("map-wrap");
         if (wrap) {
           const p = document.createElement("p");
-          p.className = "fm-map-porting";
+          p.className = "fm-map-error";
           p.textContent =
             "The map could not be loaded. Reload the page, or try again in a moment.";
           wrap.appendChild(p);
@@ -106,7 +110,7 @@ export function FieldMapMount() {
       if (key === previous) return;
       lastOpened.current = key;
       const path =
-        newLevel === "overview" ? "/map" : `/map/${newLevel}/${encodeURIComponent(newSlug ?? "")}`;
+        newLevel === "overview" ? "/" : `/map/${newLevel}/${encodeURIComponent(newSlug ?? "")}`;
       // Owner's decision: a level change is a real step through the map
       // (push, so Back walks up one level at a time: overview -> layer ->
       // area -> node, each its own history entry); a slug change at the

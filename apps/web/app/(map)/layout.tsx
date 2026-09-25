@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { FieldMapMount } from "@/components/FieldMapMount";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { LEDE } from "@/lib/lede";
 // Written by apps/web/scripts/copy-fieldmap.mjs (predev, prebuild) from
 // packages/fieldmap/src/fieldmap.{js,css}; gitignored build output, see
@@ -7,25 +7,28 @@ import { LEDE } from "@/lib/lede";
 // import of data/v2/map-data.json.
 import fieldmapManifest from "../../fieldmap-manifest.json";
 
-export const metadata: Metadata = {
-  title: "Map",
-};
-
 /**
- * Shared chrome for every /map route (the whole map and the four level
- * routes under /map/[level]/[slug]). FieldMapMount is rendered here, once,
- * rather than in the per-level page components, so a layout re-render
- * (moving between levels) doesn't unmount and remount it: React keeps a
- * layout's own subtree across navigations to different children, only the
- * `children` slot changes. See FieldMapMount's own comment for why this
- * matters (it fetches and calls setData once per page load, not once per
- * level).
+ * Shared chrome for the whole map: the home page ("/", the whole map) and
+ * the four level routes under /map/[level]/[slug]. FieldMapMount is
+ * rendered here, once, rather than in the per-route page components, so a
+ * layout re-render (moving between "/" and a level, or between levels)
+ * doesn't unmount and remount it: React keeps a layout's own subtree across
+ * navigations to different children, only the `children` slot changes. See
+ * FieldMapMount's own comment for why this matters (it fetches and calls
+ * setData once per page load, not once per route).
  *
- * Renders the element IDs the fieldmap script expects. `index-cols` is
- * left out on purpose, so the script doesn't build a second copy of the
- * problem list (that list is server-rendered elsewhere, per 07's "The list
- * of every problem"). `panel` stays present but empty: the site's own
- * panel is task 3, not this task.
+ * This is a route group (`(map)`) precisely so "/" and "/map/[level]/[slug]"
+ * share this one layout: a plain `app/layout.tsx` at either location would
+ * only have covered one of the two URL shapes (docs/design/07's "Mounting").
+ *
+ * Renders the page anatomy in docs/design/03-map.md ("Page anatomy, top to
+ * bottom"): title block (with the theme control and the 2px ink rule
+ * closing it), the key, the toolbar, then the chart. The element IDs below
+ * are what the fieldmap script expects; `index-cols` is left out on
+ * purpose, so the script doesn't build a second copy of the problem list
+ * (that list is server-rendered on the home page itself, per 07's "The list
+ * of every problem"). `panel` stays present but empty: the site's own panel
+ * is task 3, not this task.
  */
 export default function MapLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -34,13 +37,14 @@ export default function MapLayout({ children }: { children: React.ReactNode }) {
           packages/fieldmap/src/fieldmap.css (see
           apps/web/scripts/copy-fieldmap.mjs), not bundled by Next's CSS
           pipeline, so a plain <link> is the only way to load it. This
-          layout renders once per /map page load (it doesn't remount when
-          only the level changes, see FieldMapMount's comment), so there
-          is only ever one <link rel="stylesheet"> for this href in the
-          DOM; React also injects its own <link rel="preload"> for the
-          same href alongside it, which is expected and not a duplicate
-          stylesheet. Verified with Playwright across layer, area and node
-          navigation: the stylesheet link count stays at 1. */}
+          layout renders once per page load in this route group (it doesn't
+          remount when only the route changes, see FieldMapMount's
+          comment), so there is only ever one <link rel="stylesheet"> for
+          this href in the DOM; React also injects its own
+          <link rel="preload"> for the same href alongside it, which is
+          expected and not a duplicate stylesheet. Verified with Playwright
+          across layer, area and node navigation: the stylesheet link count
+          stays at 1. */}
       <link rel="stylesheet" href={`/${fieldmapManifest.css}`} />
       <FieldMapMount />
       {/* SVG patterns the ported script's v1.2 path references by id
@@ -83,6 +87,7 @@ export default function MapLayout({ children }: { children: React.ReactNode }) {
           <p className="fm-lede lede">{LEDE}</p>
           <p className="fm-meta" id="meta" />
         </div>
+        <ThemeToggle />
       </div>
       <hr className="fm-rule" />
 
