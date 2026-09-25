@@ -158,7 +158,9 @@ export default async function MapLayout({ children }: { children: React.ReactNod
       <section className="chart" id="chart" aria-label="Map of the field">
         <div className="grid-top" id="grid-top" aria-hidden="true" />
         <div className="grid-left" id="grid-left" aria-hidden="true" />
-        <div className="map-wrap" id="map-wrap">
+        {/* tabIndex -1 so the skip link has somewhere to land before the map
+            has drawn its first tile (components/SkipToMap.tsx). */}
+        <div className="map-wrap" id="map-wrap" tabIndex={-1}>
           <p className="vh" id="map-help">
             Map of every problem in the field. Arrow keys move between problems, Enter opens
             one, Escape goes back up a level.

@@ -22,13 +22,26 @@ export function SkipToMap() {
   return (
     <a
       className="fm-skip"
-      href="#map"
+      // #map-wrap, not #map: the wrapper carries tabindex=-1, so even before
+      // this component has hydrated (when the browser follows the href itself
+      // rather than running onClick) the reader lands on a focusable element
+      // instead of losing focus to <body>.
+      href="#map-wrap"
       onClick={(e) => {
-        const tile = document.querySelector<SVGGElement>('#map .hex[tabindex="0"]');
-        if (!tile) return; // no map yet: let the href fall through to #map
+        // The roving tile if the map has drawn; otherwise the map wrapper, which
+        // carries tabindex=-1 for exactly this case. Falling through to the bare
+        // #map href would scroll there and leave focus on this link, so someone
+        // told they had skipped to the map would have nothing focused.
+        const target =
+          document.querySelector<SVGGElement>('#map .hex[tabindex="0"]') ??
+          document.getElementById("map-wrap");
+        if (!target) return;
         e.preventDefault();
-        tile.focus();
-        tile.scrollIntoView({ block: "center", behavior: "smooth" });
+        target.focus();
+        // Matches the module's own scrolls (packages/fieldmap/src/fieldmap.js),
+        // which all gate smooth behaviour on the reduced-motion preference.
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        target.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
       }}
     >
       Skip to the map
