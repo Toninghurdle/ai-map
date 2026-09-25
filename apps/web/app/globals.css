@@ -171,7 +171,10 @@ button {
 }
 
 .fm-meta {
-  margin: 10px 0 0;
+  /* 6px, matching the reference's own .meta rule
+     (packages/fieldmap/src/fieldmap.css): at 10px everything below the meta
+     line sat 4px lower than the reference on every wide state. */
+  margin: 6px 0 0;
   font-size: 13.5px;
   color: var(--fm-ink-3);
 }
