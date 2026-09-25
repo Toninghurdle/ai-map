@@ -25,3 +25,20 @@ supabase/.temp/
 # playwright
 playwright-report/
 test-results/
+
+# fieldmap: packages/fieldmap/src is the only committed copy; apps/web's
+# copy-fieldmap.mjs (predev, prebuild) writes these hashed build outputs
+apps/web/public/fieldmap.*.js
+apps/web/public/fieldmap.*.css
+apps/web/fieldmap-manifest.json
+
+# design QA output: screenshots, pixel diffs and the report the design-qa
+# agent writes. A full pass is ~30 folders of PNG pairs, regenerated from the
+# running site whenever it runs, so it isn't worth versioning.
+qa/
+
+# Written and re-added by `next dev` (next/dist/server/lib/generate-agent-files.js),
+# not by us. They carry em-dashes, so committing them breaks `pnpm check:emdash`,
+# and the file's own text invites an agent to commit it. Ignored so it can't be.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

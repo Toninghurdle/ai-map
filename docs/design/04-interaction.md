@@ -73,7 +73,9 @@ For each tile, try these positions in order and take the first that works: right
 2. overlaps a tag already placed (2px margin) or any lit tile (1px margin);
 3. overlaps an island name or layer title (1px margin), on the first pass only.
 
-At problem level the linked tags get a second pass that allows overlapping island names, and the selected problem's tag gets a third pass that ignores everything except the map edge, so it always appears. At organisation level there's only the first pass: a tag that can't be placed cleanly is left out, since the panel lists every problem anyway. Never draw boxes behind tags; the halo is enough.
+At problem level the linked tags get a second pass that tries the same eight positions further out, with the gap between tile and tag raised from 5px to 18px, still rejecting every overlap. Only if that fails does a third pass allow the tag to overlap an island name or layer title: the tag is placed, and the name it covers is hidden (opacity 0 over 0.2s) for as long as the problem is open, then restored. Tags beat island names, because the tags are what the reader asked for. The selected problem's tag gets a final pass that ignores everything except the map edge, so it always appears. At organisation level there's only the first pass: a tag that can't be placed cleanly is left out, since the panel lists every problem anyway. Never draw boxes behind tags; the halo is enough.
+
+A tag is tested against where an island name actually is on screen, not the box the layout reserved for it: the reserved box is a slot in the packing, and the centred text inside it can be wider or narrower than the slot.
 
 ## Selection rings and links
 
@@ -102,7 +104,8 @@ The tooltip isn't shown for the tile that's already selected. For a tile with ke
 
 ## Keyboard
 
-- The map is one tab stop. Tiles use a roving `tabindex`: the last focused tile (or the first tile of the first sub-area) is the one that receives focus.
+- The map itself is one tab stop: tiles use a roving `tabindex`, so Tab moves on past the map rather than through every tile. The tile that receives focus is the last focused one, or the open problem, or the first tile of the first sub-area.
+- A "Skip to the map" link is the first focusable element on the page, so the map is one press away. It's visually hidden until focused, then shown top-left as a square button (1px ink border, 2px radius, paper background, 13.5px 500), and it moves focus to the tile holding the roving `tabindex`. Without it the page chrome (theme, key rows, layer buttons, search, toolbar) stands between the reader and the map.
 - Arrow keys move to the nearest tile in that direction. Score candidates by distance along the direction plus 2.2 times the distance across it, and ignore tiles that are more than 1.8 times further across than along.
 - Enter or Space opens the focused problem. Escape goes up a level (see above), returning focus to the panel's close button if it came from inside the panel.
 - While a tile has keyboard focus, a small hint sits in the bottom-left corner of the map: "Arrow keys move · Enter opens · Esc goes back".

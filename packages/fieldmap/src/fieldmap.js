@@ -1,74 +1,14 @@
-<svg class="vh" aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute">
-  <defs>
-    <pattern id="tx-lab" patternUnits="userSpaceOnUse" width="4.2" height="4.2" patternTransform="rotate(45)">
-      <path d="M1 0V4.2" style="stroke:var(--m-lab-line)" stroke-width="1.5"/>
-    </pattern>
-    <pattern id="tx-adj" patternUnits="userSpaceOnUse" width="4.4" height="4.4">
-      <circle cx="1.1" cy="1.1" r=".8" style="fill:var(--o-dot)"/>
-      <circle cx="3.3" cy="3.3" r=".8" style="fill:var(--o-dot)"/>
-    </pattern>
-  </defs>
-</svg>
-
-<div class="page">
-  <header class="head">
-    <div>
-      <h1>AI Safety and Security <span>Field Map</span></h1>
-      <p class="lede">Every hex is a problem someone could work on. Gold land has one or two organisations on it, green has several, dark forest has many, and pink marks the problems nobody independent has taken on.</p>
-      <p class="meta" id="meta"></p>
-    </div>
-    <button class="theme" id="theme-btn" type="button">Auto</button>
-  </header>
-
-  <section class="census" id="census" aria-label="Key"></section>
-
-  <div class="bar">
-    <nav class="layers" id="layers" aria-label="Layers"></nav>
-    <div class="find">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.6 10.6l3.4 3.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <input id="find" type="search" placeholder="Find a problem or organisation" autocomplete="off" spellcheck="false"
-        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="find-list" aria-label="Find a problem, sub-area or organisation">
-      <ul class="find-list" id="find-list" role="listbox" hidden></ul>
-    </div>
-    <button class="tbtn" id="links-btn" type="button" aria-pressed="false">Show all links</button>
-    <button class="tbtn" id="home-btn" type="button" hidden>Whole map</button>
-  </div>
-  <div class="lensbar" id="lensbar" hidden>
-    <span class="lb-label" id="lb-label">Lenses</span>
-    <div class="lb-chips" id="lb-chips" role="group" aria-labelledby="lb-label"></div>
-    <p class="lb-def" id="lb-def" hidden></p>
-  </div>
-
-  <section class="chart" id="chart" aria-label="Map of the field">
-    <div class="grid-top" id="grid-top" aria-hidden="true"></div>
-    <div class="grid-left" id="grid-left" aria-hidden="true"></div>
-    <div class="map-wrap" id="map-wrap">
-      <p class="vh" id="map-help">Map of every problem in the field. Arrow keys move between problems, Enter opens one, Escape goes back up a level.</p>
-      <p class="kbd-hint" id="kbd-hint" hidden>Arrow keys move · Enter opens · Esc goes back</p>
-      <svg id="map" role="group" aria-labelledby="map-help"></svg>
-      <aside class="panel" id="panel" aria-live="polite" aria-label="Details" hidden></aside>
-    </div>
-    <p class="chart-foot" id="chart-foot"></p>
-  </section>
-
-  <details class="index" id="index">
-    <summary>Every problem, as a list</summary>
-    <div class="index-cols" id="index-cols"></div>
-  </details>
-</div>
-
-<div class="tip" id="tip" role="tooltip" hidden></div>
-
-<script type="application/json" id="field-map-data">/*__DATA__*/</script>
-<script type="application/json" id="field-map-orgs">/*__ORGS__*/</script>
-<script>
 /*
   AI Safety and Security Field Map: map view.
 
-  Built from two data blocks above:
-    #field-map-data  the map-view file (layers, sub-areas, problems, statuses, counts, links)
-    #field-map-orgs  organisations and their evidenced tags, from the full dataset
-  If the main block already carries "orgs" and "edges" (the full 09 file), those are used.
+  Ported from docs/design/reference/src/body.html into packages/fieldmap as
+  little changed as possible (docs/plan/mvp.md task 1). The reference page
+  embeds two <script type="application/json"> blocks and parses them at
+  boot; this module has no embedded data and boots with an empty map
+  instead, waiting for the host to call FieldMap.setData(json, orgs) (the
+  map-view file: layers, sub-areas, problems, statuses, counts, links; and
+  organisations with their evidenced tags). If the main json already
+  carries "orgs" and "edges", those are used without a second argument.
   Nothing is hand-placed: island shapes grow from each sub-area's size, islands pack around
   each layer's centre on one hex lattice, and the whole chart re-lays itself out on resize.
 
@@ -1370,8 +1310,13 @@ if ($('#theme-btn')) $('#theme-btn').addEventListener('click', () => {
 });
 
 /* ------------------------------------------------------------ boot */
+/* The reference page embeds two <script type="application/json"> blocks
+   (#field-map-data, #field-map-orgs) here and parses them at boot. The
+   module has no embedded data: the host calls FieldMap.setData(json, orgs)
+   instead (docs/design/07-integration-and-checks.md, "The component
+   contract"). ORGS_BLOCK stays null so setData's own `orgs || ORGS_BLOCK`
+   fallback is unchanged when the host passes its own orgs argument. */
 let ORGS_BLOCK = null;
-try { ORGS_BLOCK = JSON.parse($('#field-map-orgs').textContent); } catch (e){ ORGS_BLOCK = null; }
 function setData(json, orgs){
   M = buildModel(json, orgs || ORGS_BLOCK);
   state.filter = null;
@@ -1382,9 +1327,7 @@ function setData(json, orgs){
   buildText();
   renderPanel(); paint(); syncLayers(); moveCamera(true);
 }
-let raw = null;
-try { raw = JSON.parse($('#field-map-data').textContent); } catch (e){ console.error('Field map: could not read the data block', e); }
-setData(raw || {layers:[]});
+setData({layers:[]});
 if (OPTS.hash){ const [lv, s] = readHash(); if (lv !== 'overview'){ navigate(lv, s, {fromHash:true, instant:true, noScroll:true}); if (LAY && LAY.mode === 'wide' && state.level !== 'overview') requestAnimationFrame(() => { const t = chart.getBoundingClientRect().top; if (t > 24){ savedScroll = 0; window.scrollBy(0, t - 8); } }); } }
 
 let rt = 0, lastW = 0;
@@ -1404,4 +1347,3 @@ window.FieldMap = {
   relayout: render
 };
 })();
-</script>
