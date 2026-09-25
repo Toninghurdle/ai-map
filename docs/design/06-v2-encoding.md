@@ -72,6 +72,7 @@ The lede changes to match: "Every hex is a problem someone could work on. Pink m
 `lenses` on each node plus `lens_definitions` at the top level (an array of `{slug, name, definition}` or an object keyed by slug; the reference reads both). Lenses are off by default.
 
 - A row under the toolbar, only shown when at least one lens tags at least one problem: the label "Lenses" (13px 600 ink-2), then one square button per lens in the `lens_definitions` order, with its problem count in lighter text ("Agents 3").
+- A lens with no `name` of its own is named by a readable form of its slug: hyphens to spaces, first letter capitalised, so `loss-of-control` reads "Loss of control". Never show a raw slug: it reads as internal jargon. The same text is used for the button, its accessible name and anywhere else the lens is named. A `name` in the data is used unchanged.
 - Buttons match the toolbar buttons but a size smaller: 13px 500, 1px `--fm-rule-2` border, 2px radius; pressed is ink fill with paper text.
 - Clicking a lens lights its problems on the whole map, exactly like a key filter, and shows the lens definition in one line under the row (13.5px ink-2). Only one lens or key filter is on at a time. Escape, clicking it again or clicking empty sea turns it off.
 - Screen `b08-lens.png`.

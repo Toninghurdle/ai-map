@@ -538,6 +538,15 @@ function wrapText(text, font, maxW){
 
 /* --------------------------------------------------------------- model */
 let M = null;
+/* A lens with no name of its own is shown as a readable form of its slug:
+   hyphens to spaces, first letter capitalised, so "loss-of-control" reads
+   "Loss of control" rather than as internal jargon (06-v2-encoding.md,
+   Lenses). Used for the button, its accessible name and anywhere else the
+   lens is named. */
+function lensName(slug){
+  const s = String(slug).replace(/-/g, ' ').trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 function buildModel(data, orgData){
   const layers = [], nodes = new Map(), subs = new Map(), layerBy = new Map();
   (data && data.layers || []).forEach((L, li) => {
@@ -601,8 +610,8 @@ function buildModel(data, orgData){
   let v2 = false; nodes.forEach(n => { if (n.v2) v2 = true; });
   /* lenses: optional cross-cutting tags, off by default; only lenses that tag at least one problem are offered */
   const ld = data && data.lens_definitions, lensList = [];
-  if (Array.isArray(ld)) ld.forEach(l => { if (l && l.slug) lensList.push({slug:String(l.slug), name:l.name || l.slug, definition:l.definition || ''}); });
-  else if (ld && typeof ld === 'object') Object.keys(ld).forEach(k => { const v = ld[k]; lensList.push({slug:k, name:(v && v.name) || k, definition:typeof v === 'string' ? v : ((v && v.definition) || '')}); });
+  if (Array.isArray(ld)) ld.forEach(l => { if (l && l.slug) lensList.push({slug:String(l.slug), name:l.name || lensName(l.slug), definition:l.definition || ''}); });
+  else if (ld && typeof ld === 'object') Object.keys(ld).forEach(k => { const v = ld[k]; lensList.push({slug:k, name:(v && v.name) || lensName(k), definition:typeof v === 'string' ? v : ((v && v.definition) || '')}); });
   const lenses = lensList.filter(l => { let c = 0; nodes.forEach(n => { if (n.lenses.indexOf(l.slug) >= 0) c++; }); l.count = c; return c > 0; });
   return {data, layers, nodes, subs, layerBy, links, counts, adjBridge, adjCovers, bridgeElsewhere, orgs, tagCount, v2, lenses};
 }
