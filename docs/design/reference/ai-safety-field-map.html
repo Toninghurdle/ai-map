@@ -220,8 +220,10 @@ h1 span{display:block;font-weight:400}
 svg.zoomed .labels,svg.zoomed .titles{display:none}
 .islands .hex,.isl-label,.layer-title{transition:opacity .2s ease}
 /* an island name or layer title a problem's name tag had to overlap, hidden for as
-   long as that problem is open (04-interaction.md, "Placing name tags") */
-.isl-label.name-hidden,.layer-title.name-hidden{opacity:0!important;pointer-events:none}
+   long as that problem is open (04-interaction.md, "Placing name tags"). .sl is the
+   screen-space copy of an island name, shown instead of .isl-label past zoom 1.3. */
+.isl-label.name-hidden,.layer-title.name-hidden,.sl.name-hidden{opacity:0!important;pointer-events:none}
+.sl{transition:opacity .2s ease}
 .rings path{fill:none;stroke:var(--link);pointer-events:none;vector-effect:non-scaling-stroke}
 .ring-sel{stroke-width:3.2}
 .ring-rel{stroke-width:1.6}
@@ -486,7 +488,7 @@ const CONNECTION = {
   missing:{label:'No connection yet', plain:'Almost nothing flows between that field and AI developers yet. Building the link is the work.'}
 };
 const markOf = home => { const h = Array.isArray(home) ? home : []; if (h.indexOf('another-field') >= 0) return 'field'; if (h.length === 1 && h[0] === 'frontier-labs') return 'labs'; return null; };
-const UNKNOWN = {key:'unknown', cls:'unk', group:'other', label:'Not yet assessed', short:'Not assessed', plain:'Coverage has not been assessed yet.', rank:9};
+const UNKNOWN = {key:'unknown', cls:'unk', group:'other', label:'Not assessed', short:'Not assessed', plain:'Coverage has not been assessed yet.', rank:9};
 const BRIDGE = {
   'adjacent-covers-it': {label:'They cover it', plain:'The neighbouring community is already working on the AI-specific version. The move is to join or work with them.'},
   'bridge-needed': {label:'Bridge needed', plain:'The neighbouring community exists but isn’t treating the AI-specific version seriously. The move is to build a bridge, or found something.'}
@@ -1123,17 +1125,31 @@ function drawScreen(){
   if (cam.k > 1.3) s += screenLabels();
   if (state.level === 'node' || state.level === 'org') s += tags(); else hideNames([]);
   SCREEN.innerHTML = s;
+  applyHiddenScreenNames();
 }
+/* The screen-space copies of the island names, drawn instead of the world-space
+   .isl-label once the camera is past 1.3 (see drawScreen). Each one's box is kept
+   in screenNames so tags() can test against it: both sets of labels are built into
+   the same innerHTML string and are not in the DOM yet when tags() runs, so these
+   boxes are computed the same way the text is placed rather than measured. */
+let screenNames = [];
 function screenLabels(){
   const on = focusSet(), fs = LAY.fs, x1 = LAY.W - panelWidth();
+  const font = '500 ' + fs + 'px ' + FONT;
   let out = '';
+  screenNames = [];
   islands.forEach(is => {
     let lo = -Infinity; is.cells.forEach(c => { lo = Math.max(lo, c.y); });
     const [sx, sy] = toScreen((is.label.box.x0 + is.label.box.x1) / 2, lo + LAY.R);
     if (sx < -60 || sx > x1 + 60 || sy < -20 || sy > LAY.H + 20) return;
     const lit = is.cells.some(c => on.has(c.node.slug));
-    const lines = wrapText(is.sub.name, '500 ' + fs + 'px ' + FONT, 150);
-    out += '<text class="sl ' + (lit ? 'on' : 'dim') + '" font-size="' + fs + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(sy + 6 + fs * 0.9 + j * fs * 1.18) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
+    const lines = wrapText(is.sub.name, font, 150);
+    /* text-anchor is middle, so each line is centred on sx; the box is the widest
+       line, from the first line's cap height to the last line's baseline */
+    const w = lines.reduce((m, ln) => Math.max(m, measure(ln, font)), 0);
+    const top = sy + 6, bottom = sy + 6 + fs * 0.9 + (lines.length - 1) * fs * 1.18 + fs * 0.25;
+    screenNames.push({slug:is.sub.slug, x0:sx - w / 2, y0:top, x1:sx + w / 2, y1:bottom});
+    out += '<text class="sl ' + (lit ? 'on' : 'dim') + '" data-sub="' + esc(is.sub.slug) + '" font-size="' + fs + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(sy + 6 + fs * 0.9 + j * fs * 1.18) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
   });
   return out;
 }
@@ -1154,6 +1170,10 @@ function tags(){
   const names = [];
   svg.querySelectorAll('.isl-label').forEach(el => { if (el.dataset.sub) names.push(Object.assign({kind:'sub', slug:el.dataset.sub}, nameBox(el))); });
   svg.querySelectorAll('.layer-title .layer-name').forEach(el => { const g = el.closest('.layer-title'); if (g && g.dataset.layer) names.push(Object.assign({kind:'layer', slug:g.dataset.layer}, nameBox(el))); });
+  /* Past zoom 1.3 the island name on screen is the .sl copy, not the world-space
+     .isl-label (which svg.zoomed hides), so test against those boxes too or a tag
+     will overprint the very label the reader is looking at. */
+  if (cam.k > 1.3) screenNames.forEach(o => names.push({kind:'screen', slug:o.slug, x0:o.x0, y0:o.y0, x1:o.x1, y1:o.y1}));
   const over = [];
   let out = '';
   list.forEach((m, i) => {
@@ -1201,10 +1221,22 @@ function hideNames(list){
   list.forEach(o => { const el = nameEl(o); if (el) el.classList.add('name-hidden'); });
   hiddenNames = list;
 }
+/* The world-space labels are in the DOM and keep their class across frames. The
+   screen-space .sl copies are rebuilt from scratch on every draw, after tags() has
+   returned, so they are marked in applyHiddenScreenNames once SCREEN.innerHTML is
+   set rather than here. */
 function nameEl(o){
+  if (o.kind === 'screen') return null;
   return o.kind === 'sub'
     ? svg.querySelector('.isl-label[data-sub="' + CSS.escape(o.slug) + '"]')
     : svg.querySelector('.layer-title[data-layer="' + CSS.escape(o.slug) + '"]');
+}
+function applyHiddenScreenNames(){
+  if (!SCREEN) return;
+  const want = new Set(hiddenNames.filter(o => o.kind === 'screen').map(o => o.slug));
+  SCREEN.querySelectorAll('.sl').forEach(el => {
+    el.classList.toggle('name-hidden', want.has(el.dataset.sub));
+  });
 }
 
 /* ------------------------------------------------------------ navigation */
