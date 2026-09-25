@@ -27,8 +27,9 @@ import fieldmapManifest from "../../fieldmap-manifest.json";
  * are what the fieldmap script expects; `index-cols` is left out on
  * purpose, so the script doesn't build a second copy of the problem list
  * (that list is server-rendered on the home page itself, per 07's "The list
- * of every problem"). `panel` stays present but empty: the site's own panel
- * is task 3, not this task.
+ * of every problem"). `panel` is filled by the module itself for now
+ * (FieldMapMount mounts with `panel: true`, an interim until task 3 ships
+ * the site's own panel).
  */
 export default function MapLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -44,11 +44,11 @@ function levelAndSlugFromPathname(pathname: string): { level: FieldMapLevel; slu
  * props (a review finding: rendering this per-page caused a full re-fetch
  * and re-setData on every level change).
  *
- * The site owns routing (`hash: false`) and its own panel (`panel: false`,
- * task 3), so this component only wires FieldMap.open <-> the URL. It does
- * not fetch data itself beyond /data/map.json, render the panel, or render
- * the server-rendered index of every problem (`index-cols` is left
- * unmounted, per the README).
+ * The site owns routing (`hash: false`), so this component only wires
+ * FieldMap.open <-> the URL. It does not fetch data itself beyond
+ * /data/map.json, or render the server-rendered index of every problem
+ * (`index-cols` is left unmounted, per the README). The panel is the
+ * module's own for now: see the FIELD_MAP_OPTIONS comment below.
  */
 export function FieldMapMount() {
   const router = useRouter();
@@ -64,7 +64,15 @@ export function FieldMapMount() {
     let cancelled = false;
 
     async function boot() {
-      window.FIELD_MAP_OPTIONS = { hash: false, panel: false, reserveRight: 430 };
+      // Interim, until task 3 ships the site's own panel: mount with the
+      // module's built-in panel so selecting a problem, sub-area, layer or
+      // organisation actually says who works on it, and the camera centres
+      // what's lit instead of parking it beside an empty strip
+      // (docs/design/design-qa-fixes.md F1; 05-panels-and-pages.md). When
+      // the site's panel lands, switch back to
+      // { panel: false, reserveRight: 430 } and drop the #panel element's
+      // empty state in app/(map)/layout.tsx.
+      window.FIELD_MAP_OPTIONS = { hash: false, panel: true };
 
       if (!window.FieldMap) {
         await loadScriptOnce();
