@@ -52,11 +52,38 @@ button {
   outline-offset: 2px;
 }
 
+/* "Skip to the map": the first focusable element, hidden until focused, then
+   a square button top-left (docs/design/design-qa-fixes.md F9). Not .vh,
+   because this one has to become visible when it takes focus. */
+.fm-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--fm-paper);
+  color: var(--fm-ink);
+  border: 1px solid var(--fm-ink);
+  border-radius: 2px;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.fm-skip:focus,
+.fm-skip:focus-visible {
+  left: clamp(16px, 3vw, 40px);
+  top: clamp(18px, 2.4vw, 34px);
+}
+
 /* Page chrome shared by every page: docs/design/02-tokens.md "Spacing and layout". */
 .fm-page {
   max-width: 1480px;
   margin: 0 auto;
   padding: clamp(18px, 2.4vw, 34px) clamp(16px, 3vw, 40px) 56px;
+  /* the positioning context for .fm-skip, so the skip link lands inside the
+     page's own gutter rather than against the viewport edge */
+  position: relative;
 }
 
 .fm-rule {

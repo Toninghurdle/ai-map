@@ -112,7 +112,7 @@ Run these on every change to the map or the tokens:
 4. **No em-dashes** in the code, the copy or the data shown. A search for U+2014 in the built page must find nothing (`grep -c $'\\u2014'` returns 0).
 5. **British English** in all copy.
 6. **Robustness.** Load a dataset with an extra layer, an extra sub-area, unknown capacity values, an empty sub-area and a problem with no organisations. Nothing should overlap or throw; unknowns draw as "Not assessed".
-7. **Keyboard.** Tab reaches the map in one stop; arrows move sensibly; Enter opens; Escape walks back up to the whole map; focus returns to something sensible after each step.
+7. **Keyboard.** A skip link reaches the map in one press; inside the map, Tab moves on rather than through the tiles; arrows move sensibly; Enter opens; Escape walks back up to the whole map; focus returns to something sensible after each step.
 8. **Deep links.** Every level loads directly from its URL and scrolls the map into view; back and forward work.
 9. **Console.** No errors or warnings in any of the above.
 10. **A cold review.** Give the page to someone (or an agent) who hasn't seen it, ask them to find who works on a given problem and how to contact one of those organisations, and ask whether the styling looks AI-generated. Fix what they trip over.

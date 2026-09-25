@@ -104,7 +104,8 @@ The tooltip isn't shown for the tile that's already selected. For a tile with ke
 
 ## Keyboard
 
-- The map is one tab stop. Tiles use a roving `tabindex`: the last focused tile (or the first tile of the first sub-area) is the one that receives focus.
+- The map itself is one tab stop: tiles use a roving `tabindex`, so Tab moves on past the map rather than through every tile. The tile that receives focus is the last focused one, or the open problem, or the first tile of the first sub-area.
+- A "Skip to the map" link is the first focusable element on the page, so the map is one press away. It's visually hidden until focused, then shown top-left as a square button (1px ink border, 2px radius, paper background, 13.5px 500), and it moves focus to the tile holding the roving `tabindex`. Without it the page chrome (theme, key rows, layer buttons, search, toolbar) stands between the reader and the map.
 - Arrow keys move to the nearest tile in that direction. Score candidates by distance along the direction plus 2.2 times the distance across it, and ignore tiles that are more than 1.8 times further across than along.
 - Enter or Space opens the focused problem. Escape goes up a level (see above), returning focus to the panel's close button if it came from inside the panel.
 - While a tile has keyboard focus, a small hint sits in the bottom-left corner of the map: "Arrow keys move · Enter opens · Esc goes back".

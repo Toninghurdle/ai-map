@@ -1,5 +1,6 @@
 import { FieldMapMount } from "@/components/FieldMapMount";
 import { ProblemIndex } from "@/components/ProblemIndex";
+import { SkipToMap } from "@/components/SkipToMap";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ledeFor } from "@/lib/lede";
 import { getMapData } from "@/lib/data";
@@ -44,6 +45,9 @@ export default async function MapLayout({ children }: { children: React.ReactNod
 
   return (
     <main className="fm-page">
+      {/* First focusable thing on the page, so the map is one press away
+          (docs/design/design-qa-fixes.md F9). */}
+      <SkipToMap />
       {/* apps/web/public/fieldmap.<hash>.css, a build-time copy of
           packages/fieldmap/src/fieldmap.css (see
           apps/web/scripts/copy-fieldmap.mjs), not bundled by Next's CSS
