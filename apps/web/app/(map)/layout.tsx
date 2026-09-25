@@ -1,6 +1,7 @@
 import { FieldMapMount } from "@/components/FieldMapMount";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { LEDE } from "@/lib/lede";
+import { ledeFor } from "@/lib/lede";
+import { getMapData } from "@/lib/data";
 // Written by apps/web/scripts/copy-fieldmap.mjs (predev, prebuild) from
 // packages/fieldmap/src/fieldmap.{js,css}; gitignored build output, see
 // .gitignore. A plain static import, same pattern as lib/data/index.ts's
@@ -31,7 +32,15 @@ import fieldmapManifest from "../../fieldmap-manifest.json";
  * (FieldMapMount mounts with `panel: true`, an interim until task 3 ships
  * the site's own panel).
  */
-export default function MapLayout({ children }: { children: React.ReactNode }) {
+export default async function MapLayout({ children }: { children: React.ReactNode }) {
+  // The lede only promises pink when the map actually has a pink tile
+  // (lib/lede.ts); the script recomputes the same sentence on the client
+  // from the same data, so the text doesn't change after hydration.
+  const data = await getMapData();
+  const hasNone = data.layers.some((l) =>
+    l.subareas.some((s) => s.nodes.some((n) => n.capacity === "none")),
+  );
+
   return (
     <main className="fm-page">
       {/* apps/web/public/fieldmap.<hash>.css, a build-time copy of
@@ -85,7 +94,7 @@ export default function MapLayout({ children }: { children: React.ReactNode }) {
             <span className="fm-title-lead">AI Safety and Security</span>
             <span className="fm-title-sub">Field Map</span>
           </h1>
-          <p className="fm-lede lede">{LEDE}</p>
+          <p className="fm-lede lede">{ledeFor(hasNone)}</p>
           <p className="fm-meta" id="meta" />
         </div>
         <ThemeToggle />

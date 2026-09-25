@@ -123,6 +123,9 @@ h1 span{display:block;font-weight:400}
 .run svg{display:block;width:13px;height:14px;overflow:visible;margin-right:1px}
 .run .hx-fill{stroke:var(--ink);stroke-width:.7;stroke-opacity:.55}
 .run .cn{font-size:14px;font-weight:600;margin-left:8px;font-variant-numeric:tabular-nums;line-height:14px}
+/* shown in place of the run of mini tiles when a key row counts nothing, so the
+   empty space reads as deliberate (06-v2-encoding.md, "The key for v2") */
+.run .cnone{font-size:12px;color:var(--ink-3);line-height:14px}
 .cg .foot{margin:6px 0 0;font-size:12.5px;color:var(--ink-3)}
 
 /* ---------------- toolbar ---------------- */
@@ -1526,9 +1529,13 @@ function buildCensus(){
   const byStatus = k => Array.from(M.nodes.values()).filter(n => n.st.key === k);
   const row = (label, sub, list, f) => {
     const hexes = list.map(n => miniHex(specOf(n), 6.2)).join('');
+    /* An empty run would read as a rendering fault, so say so in words: the row
+       itself stays, because "nobody yet, none right now" is a fact worth
+       stating (06-v2-encoding.md, "The key for v2"). */
+    const none = list.length ? '' : '<span class="cnone">none right now</span>';
     return '<li><button class="crow" type="button" data-ft="' + f.type + '" data-fk="' + esc(f.key) + '" aria-pressed="false" title="Show only these on the map">' +
       '<span class="cl">' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' +
-      '<span class="run">' + hexes + '<span class="cn">' + list.length + '</span></span></button></li>';
+      '<span class="run">' + hexes + none + '<span class="cn">' + list.length + '</span></span></button></li>';
   };
   const st = k => STATUS_BY[k];
   const adj = byStatus('adjacent-field');
@@ -1650,12 +1657,24 @@ findList.addEventListener('mousedown', e => { const li = e.target.closest('li[da
 findIn.addEventListener('blur', () => setTimeout(closeFind, 120));
 
 /* ------------------------------------------------------------ text */
+/* The lede, built from the data rather than fixed, so it only promises pink when
+   some problem is at capacity none (06-v2-encoding.md, "The key for v2"). */
+function ledeText(){
+  const anyNone = Array.from(M.nodes.values()).some(n => n.st.key === 'none');
+  return anyNone
+    ? 'Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.'
+    : 'Every hex is a problem someone could work on. Gold means a little work, green active and dark forest busy, and right now every problem has someone on it. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.';
+}
 function buildText(){
   const d = M.data, total = M.nodes.size;
   let date = d.generated || '';
   const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (dm) date = +dm[3] + ' ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][+dm[2] - 1] + ' ' + dm[1];
-  if (M.v2 && $('.lede')) $('.lede').textContent = 'Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.';
+  /* The lede describes what is actually on the map: with no problem at
+     capacity none there is no pink tile, and promising one sends a newcomer
+     looking for something that is not there (06-v2-encoding.md, "The key for
+     v2"). */
+  if (M.v2 && $('.lede')) $('.lede').textContent = ledeText();
   const meta = $('#meta'), foot = $('#chart-foot'), idx = $('#index-cols');
   if (meta) meta.textContent = [plural(total, 'problem'), plural(M.orgs.size, 'organisation'), 'data v' + (d.version || '?') + (date ? ', ' + date : '')].join(' · ');
   if (foot) foot.innerHTML = '<span>Click a hex to see who works on it. Click an island’s name to open the whole sub-area.</span><span><b>' + M.links.length + '</b> links between problems, <b>' + M.tagCount + '</b> organisation tags, each with a source</span>';
