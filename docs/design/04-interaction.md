@@ -73,7 +73,9 @@ For each tile, try these positions in order and take the first that works: right
 2. overlaps a tag already placed (2px margin) or any lit tile (1px margin);
 3. overlaps an island name or layer title (1px margin), on the first pass only.
 
-At problem level the linked tags get a second pass that allows overlapping island names, and the selected problem's tag gets a third pass that ignores everything except the map edge, so it always appears. At organisation level there's only the first pass: a tag that can't be placed cleanly is left out, since the panel lists every problem anyway. Never draw boxes behind tags; the halo is enough.
+At problem level the linked tags get a second pass that tries the same eight positions further out, with the gap between tile and tag raised from 5px to 18px, still rejecting every overlap. Only if that fails does a third pass allow the tag to overlap an island name or layer title: the tag is placed, and the name it covers is hidden (opacity 0 over 0.2s) for as long as the problem is open, then restored. Tags beat island names, because the tags are what the reader asked for. The selected problem's tag gets a final pass that ignores everything except the map edge, so it always appears. At organisation level there's only the first pass: a tag that can't be placed cleanly is left out, since the panel lists every problem anyway. Never draw boxes behind tags; the halo is enough.
+
+A tag is tested against where an island name actually is on screen, not the box the layout reserved for it: the reserved box is a slot in the packing, and the centred text inside it can be wider or narrower than the slot.
 
 ## Selection rings and links
 

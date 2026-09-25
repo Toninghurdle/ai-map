@@ -216,6 +216,9 @@ h1 span{display:block;font-weight:400}
 .has-focus .layer-title:not(.is-on){opacity:.45}
 svg.zoomed .labels,svg.zoomed .titles{display:none}
 .islands .hex,.isl-label,.layer-title{transition:opacity .2s ease}
+/* an island name or layer title a problem's name tag had to overlap, hidden for as
+   long as that problem is open (04-interaction.md, "Placing name tags") */
+.isl-label.name-hidden,.layer-title.name-hidden{opacity:0!important;pointer-events:none}
 .rings path{fill:none;stroke:var(--link);pointer-events:none;vector-effect:non-scaling-stroke}
 .ring-sel{stroke-width:3.2}
 .ring-rel{stroke-width:1.6}
@@ -1106,7 +1109,7 @@ function drawScreen(){
     });
   }
   if (cam.k > 1.3) s += screenLabels();
-  if (state.level === 'node' || state.level === 'org') s += tags();
+  if (state.level === 'node' || state.level === 'org') s += tags(); else hideNames([]);
   SCREEN.innerHTML = s;
 }
 function screenLabels(){
@@ -1129,30 +1132,67 @@ function tags(){
   else list = M.orgs.get(state.slug).edges.map(e => e.node);
   const R = LAY.R, r = R * cam.k, x1 = LAY.W - panelWidth() - 4, placed = [], hexes = [];
   list.forEach(m => { const p = cellPos.get(m.slug); if (p){ const [hx, hy] = toScreen(p.x, p.y); hexes.push({x0:hx - r * 0.85, y0:hy - r * 0.95, x1:hx + r * 0.85, y1:hy + r * 0.95}); } });
-  const names = islands.map(is => is.label.box).concat(LAY.titles.map(t => t.box).filter(Boolean)).map(bx => { const a = toScreen(bx.x0, bx.y0), z = toScreen(bx.x1, bx.y1); return {x0:a[0], y0:a[1], x1:z[0], y1:z[1]}; });
+  /* Island names and layer titles, each keeping the slug it belongs to, so a tag that
+     has to overlap one can hide that one name rather than every name (see hideNames).
+     Measured from what is actually on screen, not from is.label.box: that box is the
+     slot the packing algorithm reserved, and the text inside it is centred and can be
+     wider or narrower, so the reserved box is not where the words are. */
+  const svgBox = svg.getBoundingClientRect();
+  const nameBox = el => { const b = el.getBoundingClientRect(); return {x0:b.left - svgBox.left, y0:b.top - svgBox.top, x1:b.right - svgBox.left, y1:b.bottom - svgBox.top}; };
+  const names = [];
+  svg.querySelectorAll('.isl-label').forEach(el => { if (el.dataset.sub) names.push(Object.assign({kind:'sub', slug:el.dataset.sub}, nameBox(el))); });
+  svg.querySelectorAll('.layer-title .layer-name').forEach(el => { const g = el.closest('.layer-title'); if (g && g.dataset.layer) names.push(Object.assign({kind:'layer', slug:g.dataset.layer}, nameBox(el))); });
+  const over = [];
   let out = '';
   list.forEach((m, i) => {
     const p = cellPos.get(m.slug); if (!p) return;
     const [sx, sy] = toScreen(p.x, p.y), sel = state.level === 'node' && i === 0;
     const fsz = sel ? 14 : 13, font = (sel ? '700 ' : '500 ') + fsz + 'px ' + FONT;
-    const w = measure(m.name, font) + 6, h = fsz + 6, gap = 5;
-    const cands = [[sx + r * 0.9 + gap, sy - h / 2], [sx - r * 0.9 - gap - w, sy - h / 2], [sx - w / 2, sy + r + 2], [sx - w / 2, sy - r - 2 - h],
-                   [sx + r * 0.6, sy - r - h], [sx + r * 0.6, sy + r], [sx - r * 0.6 - w, sy - r - h], [sx - r * 0.6 - w, sy + r]];
-    let at = null;
-    for (let pass = 0; pass < (sel ? 3 : state.level === 'org' ? 1 : 2) && !at; pass++){
+    const w = measure(m.name, font) + 6, h = fsz + 6;
+    /* pass 0 tries the eight positions at a 5px gap; pass 1 tries the same eight
+       further out, at 18px, before any overlap is allowed (04-interaction.md,
+       "Placing name tags") */
+    const at18 = pass => pass === 1 ? 18 : 5;
+    let at = null, hitNames = [];
+    for (let pass = 0; pass < (sel ? 4 : state.level === 'org' ? 1 : 3) && !at; pass++){
+      const gap = at18(pass);
+      const cands = [[sx + r * 0.9 + gap, sy - h / 2], [sx - r * 0.9 - gap - w, sy - h / 2], [sx - w / 2, sy + r + gap - 3], [sx - w / 2, sy - r - gap + 3 - h],
+                     [sx + r * 0.6, sy - r - h - (gap - 5)], [sx + r * 0.6, sy + r + (gap - 5)], [sx - r * 0.6 - w, sy - r - h - (gap - 5)], [sx - r * 0.6 - w, sy + r + (gap - 5)]];
       for (const [x, y] of cands){
         const b = {x0:x, y0:y, x1:x + w, y1:y + h};
         if (b.x0 < 4 || b.x1 > x1 || b.y0 < 4 || b.y1 > LAY.H - 4) continue;
-        if (pass < 2 && (placed.some(o => hit(o, b, 2)) || hexes.some(o => hit(o, b, 1)))) continue;
-        if (pass < 1 && names.some(o => hit(o, b, 1))) continue;
-        at = b; break;
+        if (pass < 3 && (placed.some(o => hit(o, b, 2)) || hexes.some(o => hit(o, b, 1)))) continue;
+        const clash = names.filter(o => hit(o, b, 1));
+        if (pass < 2 && clash.length) continue;
+        at = b; hitNames = clash; break;
       }
     }
     if (!at) return;
     placed.push(at);
+    /* the tag won, so the names it covers go: the reader asked for the tag */
+    hitNames.forEach(o => { if (!over.some(q => q.kind === o.kind && q.slug === o.slug)) over.push({kind:o.kind, slug:o.slug}); });
     out += '<text class="tag' + (sel ? ' sel' : '') + '" x="' + f1(at.x0 + 3) + '" y="' + f1(at.y0 + h - 5) + '">' + esc(m.name) + '</text>';
   });
+  hideNames(over);
   return out;
+}
+/* Hides the island names and layer titles a name tag had to overlap, for as long as
+   the problem or organisation is open, and restores them when it closes or the tags
+   move (04-interaction.md, "Placing name tags"). The 0.2s fade is the .isl-label and
+   .layer-title opacity transition already in fieldmap.css. */
+let hiddenNames = [];
+function hideNames(list){
+  list = list || [];
+  const key = o => o.kind + ':' + o.slug;
+  const want = new Set(list.map(key));
+  hiddenNames.forEach(o => { if (!want.has(key(o))) nameEl(o) && nameEl(o).classList.remove('name-hidden'); });
+  list.forEach(o => { const el = nameEl(o); if (el) el.classList.add('name-hidden'); });
+  hiddenNames = list;
+}
+function nameEl(o){
+  return o.kind === 'sub'
+    ? svg.querySelector('.isl-label[data-sub="' + CSS.escape(o.slug) + '"]')
+    : svg.querySelector('.layer-title[data-layer="' + CSS.escape(o.slug) + '"]');
 }
 
 /* ------------------------------------------------------------ navigation */

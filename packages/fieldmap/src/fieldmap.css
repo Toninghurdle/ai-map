@@ -204,6 +204,9 @@ h1 span{display:block;font-weight:400}
 .has-focus .layer-title:not(.is-on){opacity:.45}
 svg.zoomed .labels,svg.zoomed .titles{display:none}
 .islands .hex,.isl-label,.layer-title{transition:opacity .2s ease}
+/* an island name or layer title a problem's name tag had to overlap, hidden for as
+   long as that problem is open (04-interaction.md, "Placing name tags") */
+.isl-label.name-hidden,.layer-title.name-hidden{opacity:0!important;pointer-events:none}
 .rings path{fill:none;stroke:var(--link);pointer-events:none;vector-effect:non-scaling-stroke}
 .ring-sel{stroke-width:3.2}
 .ring-rel{stroke-width:1.6}
