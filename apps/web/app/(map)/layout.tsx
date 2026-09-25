@@ -1,4 +1,5 @@
 import { FieldMapMount } from "@/components/FieldMapMount";
+import { ProblemIndex } from "@/components/ProblemIndex";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ledeFor } from "@/lib/lede";
 import { getMapData } from "@/lib/data";
@@ -165,6 +166,13 @@ export default async function MapLayout({ children }: { children: React.ReactNod
       <div className="tip" id="tip" role="tooltip" hidden />
 
       {children}
+
+      {/* Under the chart on every map route, not only "/": it's the
+          screen-reader and keyboard alternative to the map, so someone
+          arriving on a shared problem link has to find it too, and it gives
+          a deep link enough page to scroll the chart to the top
+          (docs/design/design-qa-fixes.md F6). */}
+      <ProblemIndex />
     </main>
   );
 }
