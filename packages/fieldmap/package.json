@@ -1,0 +1,8 @@
+{
+  "name": "@ai-map/fieldmap",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The hex map as a module: a port of the reference implementation from docs/design/reference/src.",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

@@ -1,0 +1,86 @@
+/* Field map design tokens.
+   Light is the default. Dark applies when the system prefers dark and the page hasn't forced light
+   (data-theme="light" on <html>), or whenever data-theme="dark" is set.
+   The reference implementation uses older names for some of these; 02-tokens.md has the mapping. */
+
+:root{
+  color-scheme: light;
+
+  /* page and text */
+  --fm-page:#f5f8fa;
+  --fm-paper:#ffffff;             /* panels, tooltip, chart margin */
+  --fm-ink:#16181a;
+  --fm-ink-2:#44484d;             /* secondary text */
+  --fm-ink-3:#686e74;             /* tertiary text, counts, meta */
+  --fm-rule:rgba(22,24,26,.16);   /* list separators */
+  --fm-rule-2:rgba(22,24,26,.5);  /* control borders, underlines */
+  --fm-focus:#0a5bd3;
+
+  /* sea: open water, one hex out, shallows next to land */
+  --fm-sea:#4cb8e5;
+  --fm-shelf:#79caee;
+  --fm-shoal:#a8dcf3;
+  --fm-contour:rgba(255,255,255,.75);
+
+  /* tile frames */
+  --fm-frame:#fbf6dc;
+  --fm-frame-edge:#e3d8ad;
+
+  /* capacity: the tile fill */
+  --fm-cap-none:#c8358a;          /* pink: nobody yet */
+  --fm-cap-thin:#f7d65a;          /* wheat gold: a little */
+  --fm-cap-active:#8cb52a;        /* pasture green: active */
+  --fm-cap-busy:#2f6a22;          /* forest: busy */
+  --fm-cap-unknown:#d4d4d0;       /* not assessed */
+  --fm-on-cap-none:#ffffff;       /* text on each fill */
+  --fm-on-cap-thin:#16181a;
+  --fm-on-cap-active:#16181a;
+  --fm-on-cap-busy:#ffffff;
+  --fm-on-cap-unknown:#16181a;
+
+  /* home tokens */
+  --fm-home-labs:#c8358a;         /* ring: frontier labs only */
+  --fm-home-field:#a3b0f4;        /* dot: another field */
+  --fm-home-field-edge:#5d67b8;
+
+  /* lines and states */
+  --fm-link:#16181a;              /* selection rings and relationship lines */
+  --fm-dim:.25;                   /* opacity of tiles outside the current focus */
+
+  /* type */
+  --fm-font:"Jost","Futura","Century Gothic","Avenir Next",system-ui,sans-serif;
+
+  /* shape */
+  --fm-radius:2px;
+  --fm-shadow-float:4px 4px 0 var(--fm-rule);
+  --fm-shadow-sheet:0 -6px 0 var(--fm-rule);
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --fm-page:#08131b; --fm-paper:#0d1b25;
+    --fm-ink:#e9ebed; --fm-ink-2:#b2b7bc; --fm-ink-3:#848b92;
+    --fm-rule:rgba(233,235,237,.14); --fm-rule-2:rgba(233,235,237,.5);
+    --fm-focus:#6aa8ff;
+    --fm-sea:#0c2d42; --fm-shelf:#10394f; --fm-shoal:#164a66; --fm-contour:rgba(255,255,255,.16);
+    --fm-frame:#c9c09a; --fm-frame-edge:#8f8766;
+    --fm-cap-none:#e0559f; --fm-cap-thin:#e6c552; --fm-cap-active:#7fa82a; --fm-cap-busy:#2f6a22; --fm-cap-unknown:#3c4146;
+    --fm-on-cap-none:#16181a; --fm-on-cap-thin:#16181a; --fm-on-cap-active:#16181a; --fm-on-cap-busy:#ffffff; --fm-on-cap-unknown:#e9ebed;
+    --fm-home-labs:#e0559f; --fm-home-field:#98a5ec; --fm-home-field-edge:#525cae;
+    --fm-link:#f2f4f6; --fm-dim:.28;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fm-page:#08131b; --fm-paper:#0d1b25;
+  --fm-ink:#e9ebed; --fm-ink-2:#b2b7bc; --fm-ink-3:#848b92;
+  --fm-rule:rgba(233,235,237,.14); --fm-rule-2:rgba(233,235,237,.5);
+  --fm-focus:#6aa8ff;
+  --fm-sea:#0c2d42; --fm-shelf:#10394f; --fm-shoal:#164a66; --fm-contour:rgba(255,255,255,.16);
+  --fm-frame:#c9c09a; --fm-frame-edge:#8f8766;
+  --fm-cap-none:#e0559f; --fm-cap-thin:#e6c552; --fm-cap-active:#7fa82a; --fm-cap-busy:#2f6a22; --fm-cap-unknown:#3c4146;
+  --fm-on-cap-none:#16181a; --fm-on-cap-thin:#16181a; --fm-on-cap-active:#16181a; --fm-on-cap-busy:#ffffff; --fm-on-cap-unknown:#e9ebed;
+  --fm-home-labs:#e0559f; --fm-home-field:#98a5ec; --fm-home-field-edge:#525cae;
+  --fm-link:#f2f4f6; --fm-dim:.28;
+}

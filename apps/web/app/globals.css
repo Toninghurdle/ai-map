@@ -1,0 +1,289 @@
+/* Single source of values: the design tokens live in docs/design/tokens.css
+   (the design bible) and are imported here rather than copied, so there is
+   only ever one file to update. See docs/design/02-tokens.md. */
+@import "../../../docs/design/tokens.css";
+
+/* Registers the Jost family used by --fm-font. next/font/google is
+   unreachable from this build environment (the sandbox's egress proxy
+   rejects fonts.googleapis.com), so the Jost faces are loaded from the
+   @fontsource/jost package instead; see apps/web/README.md. */
+@import "@fontsource/jost/400.css";
+@import "@fontsource/jost/500.css";
+@import "@fontsource/jost/600.css";
+@import "@fontsource/jost/700.css";
+@import "@fontsource/jost/400-italic.css";
+@import "@fontsource/jost/500-italic.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--fm-page);
+  color: var(--fm-ink);
+  font-family: var(--fm-font);
+  font-feature-settings: "kern", "liga";
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--fm-focus);
+  outline-offset: 2px;
+}
+
+/* Page chrome shared by every page: docs/design/02-tokens.md "Spacing and layout". */
+.fm-page {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: clamp(18px, 2.4vw, 34px) clamp(16px, 3vw, 40px) 56px;
+}
+
+.fm-rule {
+  border: none;
+  border-top: 2px solid var(--fm-ink);
+  margin: 0;
+}
+
+/* Theme button: docs/design/02-tokens.md square controls, 2px radius. */
+.fm-theme-btn {
+  background: var(--fm-paper);
+  border: 1px solid var(--fm-ink);
+  border-radius: 2px;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fm-theme-btn:hover {
+  background: var(--fm-ink);
+  color: var(--fm-paper);
+}
+
+/* Title block, shared by / and /map (docs/design/03-map.md "Page anatomy"). */
+.fm-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.fm-title h1 {
+  margin: 0;
+  font-weight: 700;
+  font-size: clamp(30px, 4.3vw, 56px);
+  line-height: 0.95;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+
+.fm-title h1 .fm-title-sub {
+  display: block;
+  font-weight: 400;
+}
+
+.fm-lede {
+  margin: 14px 0 0;
+  max-width: 58ch;
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--fm-ink-2);
+}
+
+@media (max-width: 700px) {
+  .fm-lede {
+    font-size: 16px;
+  }
+}
+
+.fm-meta {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  color: var(--fm-ink-3);
+}
+
+.fm-title-block {
+  padding-bottom: 18px;
+}
+
+.fm-porting-note {
+  margin: 22px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--fm-ink-2);
+  font-style: italic;
+}
+
+/* The server-rendered index of every problem (docs/design/03-map.md, 07-integration-and-checks.md). */
+.fm-index {
+  margin-top: 34px;
+}
+
+.fm-index-heading {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 18px;
+}
+
+.fm-index-layer {
+  margin: 0 0 32px;
+}
+
+.fm-index-layer h3 {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin: 0;
+}
+
+.fm-index-layer .fm-role-line {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--fm-ink-2);
+}
+
+.fm-index-subarea {
+  margin: 20px 0 0;
+  padding-left: 0;
+}
+
+.fm-index-subarea h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.fm-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fm-index-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--fm-rule);
+}
+
+.fm-index-row:first-child {
+  border-top: none;
+}
+
+.fm-index-row a {
+  flex: 1;
+  min-width: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+  font-size: 15px;
+}
+
+.fm-index-row a:hover {
+  text-decoration-color: var(--fm-ink);
+}
+
+.fm-index-row .fm-org-count {
+  flex: none;
+  font-size: 13.5px;
+  color: var(--fm-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* /map placeholder toolbar controls: unstyled beyond the tokens until the
+   real map script and toolbar (docs/design/03-map.md "Toolbar") land. */
+#find {
+  font-family: inherit;
+  border: none;
+  border-bottom: 1.5px solid var(--fm-ink);
+  background: transparent;
+  padding: 6px 2px;
+  font-size: 14px;
+  color: var(--fm-ink);
+  margin: 10px 8px 10px 0;
+}
+
+#links-btn,
+#home-btn {
+  font-family: inherit;
+  background: var(--fm-paper);
+  color: var(--fm-ink);
+  border: 1px solid var(--fm-rule-2);
+  border-radius: 2px;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+/* /map placeholder chart frame (docs/design/03-map.md "The chart"). */
+.fm-chart {
+  border: 2.5px solid var(--fm-ink);
+  padding: 18px 18px 0 22px;
+  margin-top: 20px;
+}
+
+.fm-map-area {
+  border: 1px solid var(--fm-ink);
+  min-height: 420px;
+  flex: 1 1 auto;
+  width: 100%;
+  background: var(--fm-sea);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fm-map-porting {
+  /* Ink on the cream frame token, which stays light in both themes, same
+     as name tags in docs/design/04-interaction.md, so it reads whatever
+     the sea colour is doing. */
+  color: #16181a;
+  background: var(--fm-frame);
+  border: 1px solid var(--fm-frame-edge);
+  border-radius: 2px;
+  font-size: 14.5px;
+  max-width: 40ch;
+  text-align: center;
+  padding: 10px 16px;
+  margin: 0;
+}
+
+.fm-chart-foot {
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--fm-ink-3);
+}
+
+/* not-found page */
+.fm-not-found h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}

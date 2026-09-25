@@ -1,0 +1,27 @@
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# env: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# supabase local state (config.toml and migrations are committed)
+supabase/.branches/
+supabase/.temp/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# playwright
+playwright-report/
+test-results/

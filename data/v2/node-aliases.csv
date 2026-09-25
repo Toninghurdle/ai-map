@@ -1,0 +1,16 @@
+old_slug,new_slug,change,date
+misuse.military.arms-control,misuse.military.lethal-autonomy,merged,2026-09-24
+meta.funding.fiscal-sponsorship,meta.funding.funding-infrastructure,merged,2026-09-24
+meta.funding.prizes,meta.funding.funding-infrastructure,merged,2026-09-24
+meta.funding.incubation,meta.funding.funding-infrastructure,merged,2026-09-24
+meta.convenings.cross-sector,meta.convenings.convenings-and-events,merged,2026-09-24
+meta.convenings.subfield-forums,meta.convenings.convenings-and-events,merged,2026-09-24
+meta.convenings.event-infrastructure,meta.convenings.convenings-and-events,merged,2026-09-24
+meta.tooling.on-demand-expertise,meta.talent.senior-and-specialist-recruitment,merged,2026-09-24
+meta.communications.narrative-strategy,meta.communications.public-opinion,merged,2026-09-24
+meta.strategy.macrostrategy,meta.evidence.macrostrategy-and-prioritisation,merged,2026-09-24
+meta.strategy.prioritisation,meta.evidence.macrostrategy-and-prioritisation,merged,2026-09-24
+meta.tooling.compute-access,meta.tooling.shared-research-infrastructure,merged,2026-09-24
+meta.tooling.datasets-and-environments,meta.tooling.shared-research-infrastructure,merged,2026-09-24
+meta.strategy.threat-modelling,meta.evidence.threat-modelling,moved,2026-09-24
+meta.strategy,meta.evidence,sub-area merged,2026-09-24
