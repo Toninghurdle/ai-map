@@ -124,6 +124,23 @@ button {
   .fm-lede {
     font-size: 16px;
   }
+
+  /* One column on phones, with the theme button above the title and
+     left-aligned, so the title, lede and meta line get the full width
+     instead of being squeezed into about 60% of it beside the button
+     (docs/design/03-map.md item 1, "on phones it sits above the title";
+     docs/design/design-qa-fixes.md F7). Matches the reference's own phone
+     rules for .head and .theme (packages/fieldmap/src/fieldmap.css). */
+  .fm-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .fm-title-row .fm-theme-btn {
+    order: -1;
+    align-self: flex-start;
+  }
 }
 
 .fm-meta {
