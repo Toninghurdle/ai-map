@@ -25,3 +25,9 @@ supabase/.temp/
 # playwright
 playwright-report/
 test-results/
+
+# fieldmap: packages/fieldmap/src is the only committed copy; apps/web's
+# copy-fieldmap.mjs (predev, prebuild) writes these hashed build outputs
+apps/web/public/fieldmap.*.js
+apps/web/public/fieldmap.*.css
+apps/web/fieldmap-manifest.json

@@ -24,7 +24,7 @@ The reference script is a plain IIFE with no dependencies. It reads two JSON scr
 
 **Events and callbacks:**
 
-- `document` receives `fieldmap:navigate` with `detail: {level, slug}` whenever the level or slug changes. The site mirrors this into `/map/<level>/<slug>` with `router.replace`.
+- `document` receives `fieldmap:navigate` with `detail: {level, slug}` whenever the level or slug changes. The site mirrors this into `/map/<level>/<slug>`: a change of level uses `router.push` (so Back walks up the map one level at a time), a change of slug at the same level uses `router.replace` (so browsing problem to problem, or organisation to organisation, doesn't fill history with one entry per hex).
 - `window.onNodeSelect(slug)` is called when the open problem changes, with `null` when none is open.
 
 When the site owns the panel, it should still call `FieldMap.open(...)` when its own links are followed, so the map, the camera and the lit set stay in step.

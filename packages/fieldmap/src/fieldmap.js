@@ -1,0 +1,1257 @@
+/*
+  AI Safety and Security Field Map: map view.
+
+  Ported from docs/design/reference/src/body.html into packages/fieldmap as
+  little changed as possible (docs/plan/mvp.md task 1). The reference page
+  embeds two <script type="application/json"> blocks and parses them at
+  boot; this module has no embedded data and boots with an empty map
+  instead, waiting for the host to call FieldMap.setData(json, orgs) (the
+  map-view file: layers, sub-areas, problems, statuses, counts, links; and
+  organisations with their evidenced tags). If the main json already
+  carries "orgs" and "edges", those are used without a second argument.
+  Nothing is hand-placed: island shapes grow from each sub-area's size, islands pack around
+  each layer's centre on one hex lattice, and the whole chart re-lays itself out on resize.
+
+  Levels, each with a URL:
+    #map  #map/layer/<slug>  #map/area/<slug>  #map/node/<slug>  #map/org/<org_id>
+  (#map/node/<slug> matches the v0.1 router.)
+
+  Integration
+    window.onNodeSelect(slug)   called when the open problem changes; null when none is open.
+    'fieldmap:navigate' event   on document, {detail:{level, slug}}.
+    window.FieldMap             { open(level, slug), select(slug), clear(), setData(json, orgs), relayout() }
+    window.FIELD_MAP_OPTIONS    optional, set before this script: { hash:false, panel:false, reserveRight:430 }.
+                                reserveRight (px, or a function of the level) keeps the camera and name tags clear
+                                of a host-rendered panel on the right; ignored unless panel is false.
+*/
+(function(){
+'use strict';
+
+const OPTS = Object.assign({hash:true, panel:true}, window.FIELD_MAP_OPTIONS || {});
+const SQ3 = Math.sqrt(3);
+const DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const FONT = '"Jost", "Futura", "Century Gothic", "Avenir Next", system-ui, sans-serif';
+
+const STATUS = [
+  {key:'unowned',        cls:'un',  group:'gap',   label:'Unowned',        short:'Nobody yet',               plain:'Nobody works on this yet.'},
+  {key:'lab-internal',   cls:'lab', group:'gap',   label:'Lab-internal',   short:'Only inside labs',         plain:'Worked on inside frontier labs only, with no independent organisation.'},
+  {key:'nascent',        cls:'nas', group:'busy',  label:'Nascent',        short:'One or two',               plain:'An idea and one or two organisations or people.'},
+  {key:'covered',        cls:'cov', group:'busy',  label:'Covered',        short:'Several',                  plain:'Several organisations, with room for more.'},
+  {key:'crowded',        cls:'cro', group:'busy',  label:'Crowded',        short:'Many',                     plain:'Many organisations; hard for a newcomer to add much.'},
+  {key:'adjacent-field', cls:'adj', group:'other', label:'Adjacent field', short:'Another field',            plain:'Owned by a community that does not call itself AI safety.'}
+];
+const STATUS_BY = {}; STATUS.forEach((s, i) => { STATUS_BY[s.key] = Object.assign({rank:i}, s); });
+/* taxonomy v2: tile colour is capacity only; home is a small token; connection lives in the panel */
+const CAPACITY = [
+  {key:'none',   cls:'un',  group:'gap',  label:'None',   short:'Nobody yet', plain:'Nobody is working on this yet.'},
+  {key:'thin',   cls:'nas', group:'busy', label:'Thin',   short:'A little',   plain:'One or two groups or people are working on it.'},
+  {key:'active', cls:'cov', group:'busy', label:'Active', short:'Active',     plain:'Several groups are working on it, with room for more.'},
+  {key:'busy',   cls:'cro', group:'busy', label:'Busy',   short:'Busy',       plain:'Many groups work on it. Joining one is usually a better move than starting something new.'}
+];
+const CAP_BY = {}; CAPACITY.forEach((s, i) => { CAP_BY[s.key] = Object.assign({rank:i}, s); });
+const HOME = {'independent-ai-safety':'Independent AI safety groups','frontier-labs':'Frontier labs','government':'Government','commercial':'Companies','academia':'Universities','another-field':'Another field'};
+const MARK = {
+  labs:  {label:'Only frontier labs', plain:'Outside the labs, nobody is working on it yet.'},
+  field: {label:'Another field',      plain:'A community outside AI safety holds this problem.'}
+};
+const CONNECTION = {
+  strong: {label:'Strong connection', plain:'That field already works closely with AI developers and AI safety.'},
+  weak:   {label:'Weak connection',   plain:'There is some contact, but little flows between that field and AI developers.'},
+  missing:{label:'No connection yet', plain:'Almost nothing flows between that field and AI developers yet. Building the link is the work.'}
+};
+const markOf = home => { const h = Array.isArray(home) ? home : []; if (h.indexOf('another-field') >= 0) return 'field'; if (h.length === 1 && h[0] === 'frontier-labs') return 'labs'; return null; };
+const UNKNOWN = {key:'unknown', cls:'unk', group:'other', label:'Not yet assessed', short:'Not assessed', plain:'Coverage has not been assessed yet.', rank:9};
+const BRIDGE = {
+  'adjacent-covers-it': {label:'They cover it', plain:'The neighbouring community is already working on the AI-specific version. The move is to join or work with them.'},
+  'bridge-needed': {label:'Bridge needed', plain:'The neighbouring community exists but isn’t treating the AI-specific version seriously. The move is to build a bridge, or found something.'}
+};
+const LAYER_ROLE = {model:'The thing being built', misuse:'People turning it against the world', society:'The world adapting', meta:'What the other three stand on'};
+const FOUNDATION = 'meta';
+const ORG_TYPE = {'nonprofit-research':'Research nonprofit','for-profit-startup':'Startup','field-building':'Field-building','government':'Government','nonprofit':'Nonprofit','academic':'Academic','think-tank':'Think tank','advocacy':'Advocacy','lab-safety-team':'Lab safety team','funder':'Funder','standards-body':'Standards body','vc':'Investor','individual-led-project':'Individual project','media':'Media'};
+const APPROACH = {'hiring':['Hiring',1],'fellowship-or-programme':['Fellowship or programme',1],'open-to-collaborators':['Open to collaborators',1],'contact-form':['Contact form',1],'publishes-open-problems':['Publishes open problems',0],'closed':['Not taking approaches',0]};
+const ORG_STATUS = {closed:'Closed', dormant:'Dormant', unknown:'Status unknown'};
+
+/* ---------------------------------------------------------------- utils */
+const $ = (s, el) => (el || document).querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const f1 = v => (Math.round(v * 10) / 10).toString();
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ax = (q, r, R) => [SQ3 * R * (q + r / 2), 1.5 * R * r];
+const key = (q, r) => q + ',' + r;
+const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const safeUrl = u => /^https?:\/\//i.test(String(u || '')) ? String(u) : '';
+
+const hexCache = new Map();
+function hexD(r){
+  const k = f1(r);
+  if (hexCache.has(k)) return hexCache.get(k);
+  const pts = [];
+  for (let i = 0; i < 6; i++){ const a = Math.PI / 180 * (60 * i - 90); pts.push([r * Math.cos(a), r * Math.sin(a)]); }
+  const t = Math.min(0.06, 1.2 / Math.max(r, 1));
+  let d = '';
+  for (let i = 0; i < 6; i++){
+    const p = pts[i], pv = pts[(i + 5) % 6], nx = pts[(i + 1) % 6];
+    const a = [p[0] + (pv[0] - p[0]) * t, p[1] + (pv[1] - p[1]) * t], b = [p[0] + (nx[0] - p[0]) * t, p[1] + (nx[1] - p[1]) * t];
+    d += (i ? 'L' : 'M') + f1(a[0]) + ',' + f1(a[1]) + 'Q' + f1(p[0]) + ',' + f1(p[1]) + ' ' + f1(b[0]) + ',' + f1(b[1]);
+  }
+  hexCache.set(k, d + 'Z');
+  return d + 'Z';
+}
+function hexAt(x, y, r){
+  let d = '';
+  for (let i = 0; i < 6; i++){ const a = Math.PI / 180 * (60 * i - 90); d += (i ? 'L' : 'M') + f1(x + r * Math.cos(a)) + ',' + f1(y + r * Math.sin(a)); }
+  return d + 'Z';
+}
+const mctx = document.createElement('canvas').getContext('2d');
+function measure(str, font){ mctx.font = font; return mctx.measureText(str).width; }
+function wrapText(text, font, maxW){
+  const words = String(text).split(/\s+/).filter(Boolean), lines = [];
+  let cur = '';
+  words.forEach(w => { const t = cur ? cur + ' ' + w : w; if (!cur || measure(t, font) <= maxW) cur = t; else { lines.push(cur); cur = w; } });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/* --------------------------------------------------------------- model */
+let M = null;
+function buildModel(data, orgData){
+  const layers = [], nodes = new Map(), subs = new Map(), layerBy = new Map();
+  (data && data.layers || []).forEach((L, li) => {
+    const layer = {slug:String(L.slug || 'layer-' + li), name:L.name || L.slug, definition:L.definition || '', role:String(L.role_line || '').trim(), subareas:[]};
+    (L.subareas || []).forEach((S, si) => {
+      const sub = {slug:String(S.slug || layer.slug + '.' + si), name:S.name || S.slug, definition:S.definition || '', layer, nodes:[]};
+      (S.nodes || []).forEach((N, ni) => {
+        if (!N || !N.slug || nodes.has(N.slug)) return;
+        const node = {
+          slug:N.slug, name:N.name || N.slug, definition:N.definition || '',
+          v2: N.capacity != null,
+          st: N.capacity != null ? (CAP_BY[N.capacity] || UNKNOWN) : (STATUS_BY[N.coverage_status] || UNKNOWN),
+          bridge: N.capacity == null && BRIDGE[N.bridge_status] ? N.bridge_status : null,
+          home: Array.isArray(N.home) ? N.home.filter(h => HOME[h]) : [],
+          mark: N.capacity != null ? markOf(N.home) : null,
+          connection: CONNECTION[N.connection] ? N.connection : null,
+          connNote: String(N.connection_note || '').trim(),
+          capNote: String(N.capacity_note || '').trim(),
+          owner: String(N.owner_field || '').trim(),
+          primary: Math.max(0, +N.primary_orgs || 0), secondary: Math.max(0, +N.secondary_orgs || 0),
+          tailwind: Math.max(0, +N.tailwind_count || 0),
+          relatedRaw: Array.isArray(N.related) ? N.related : [],
+          lenses: Array.isArray(N.lenses) ? N.lenses.map(String) : [],
+          layer, sub, order:ni, main:[], side:[]
+        };
+        sub.nodes.push(node); nodes.set(node.slug, node);
+      });
+      if (sub.nodes.length){ sub.index = layer.subareas.length; layer.subareas.push(sub); subs.set(sub.slug, sub); }
+    });
+    if (layer.subareas.length){ layer.index = layers.length; layers.push(layer); layerBy.set(layer.slug, layer); }
+  });
+  nodes.forEach(n => { n.related = new Set(); });
+  nodes.forEach(n => n.relatedRaw.forEach(r => { const m = nodes.get(r); if (!m || m === n) return; n.related.add(m.slug); m.related.add(n.slug); }));
+  const links = [], seen = new Set();
+  nodes.forEach(n => n.related.forEach(r => {
+    const a = n.slug < r ? n.slug : r, b = n.slug < r ? r : n.slug, k = a + '|' + b;
+    if (!seen.has(k)){ seen.add(k); links.push([a, b]); }
+  }));
+  /* organisations: from the main file if it carries them, otherwise from the org block */
+  const src = (data && Array.isArray(data.orgs) && Array.isArray(data.edges)) ? data : (orgData || {orgs:[], edges:[]});
+  const orgs = new Map();
+  (src.orgs || []).forEach(o => { if (o && o.org_id && !orgs.has(o.org_id)) orgs.set(o.org_id, Object.assign({}, o, {edges:[]})); });
+  let tagCount = 0;
+  (src.edges || []).forEach(e => {
+    const o = orgs.get(e.org_id), n = nodes.get(e.node_slug);
+    if (!o || !n) return;
+    const rec = {org:o, node:n, main:e.role === 'primary', url:safeUrl(e.evidence_url), note:e.evidence_note || ''};
+    o.edges.push(rec); (rec.main ? n.main : n.side).push(rec); tagCount++;
+  });
+  nodes.forEach(n => { const by = (a, b) => a.org.name.localeCompare(b.org.name); n.main.sort(by); n.side.sort(by); });
+  orgs.forEach((o, id) => { if (!o.edges.length) orgs.delete(id); });
+
+  const counts = {}; STATUS.concat([UNKNOWN]).forEach(s => { counts[s.key] = 0; });
+  let adjBridge = 0, adjCovers = 0; const bridgeElsewhere = [];
+  nodes.forEach(n => {
+    counts[n.st.key]++;
+    if (n.st.key === 'adjacent-field'){ if (n.bridge === 'bridge-needed') adjBridge++; else adjCovers++; }
+    else if (n.bridge === 'bridge-needed') bridgeElsewhere.push(n);
+  });
+  subs.forEach(s => { s.sorted = sortedNodes(s); });
+  let v2 = false; nodes.forEach(n => { if (n.v2) v2 = true; });
+  /* lenses: optional cross-cutting tags, off by default; only lenses that tag at least one problem are offered */
+  const ld = data && data.lens_definitions, lensList = [];
+  if (Array.isArray(ld)) ld.forEach(l => { if (l && l.slug) lensList.push({slug:String(l.slug), name:l.name || l.slug, definition:l.definition || ''}); });
+  else if (ld && typeof ld === 'object') Object.keys(ld).forEach(k => { const v = ld[k]; lensList.push({slug:k, name:(v && v.name) || k, definition:typeof v === 'string' ? v : ((v && v.definition) || '')}); });
+  const lenses = lensList.filter(l => { let c = 0; nodes.forEach(n => { if (n.lenses.indexOf(l.slug) >= 0) c++; }); l.count = c; return c > 0; });
+  return {data, layers, nodes, subs, layerBy, links, counts, adjBridge, adjCovers, bridgeElsewhere, orgs, tagCount, v2, lenses};
+}
+const ORDER = {un:0, lab:1, nas:2, cov:3, cro:4, adj:5, unk:7};
+const orderOf = n => ORDER[n.st.cls] + (n.st.cls === 'adj' && n.bridge !== 'bridge-needed' ? 0.5 : 0);
+function sortedNodes(sub){ return sub.nodes.slice().sort((a, b) => (orderOf(a) - orderOf(b)) || (a.order - b.order)); }
+const isGap = n => n.st.group === 'gap';
+const specOf = n => ({cls:n.st.cls, bridge:n.bridge === 'bridge-needed', mark:n.mark});
+const layerRole = layer => layer.role || LAYER_ROLE[layer.slug] || (layer.definition.split(/[:.]/)[0] || '').trim().slice(0, 60);
+function layerNodes(layer){ const out = []; layer.subareas.forEach(s => s.nodes.forEach(n => out.push(n))); return out; }
+function orgsIn(nodeList){
+  const by = new Map();
+  nodeList.forEach(n => n.main.concat(n.side).forEach(e => {
+    const r = by.get(e.org) || {org:e.org, main:0, side:0}; if (e.main) r.main++; else r.side++; by.set(e.org, r);
+  }));
+  return Array.from(by.values()).sort((a, b) => (b.main - a.main) || ((b.main + b.side) - (a.main + a.side)) || a.org.name.localeCompare(b.org.name));
+}
+function orgMeta(o){
+  const bits = [ORG_TYPE[o.type] || o.type];
+  if (o.hq_country && !/^(other|unknown)$/i.test(o.hq_country)) bits.push(o.hq_country);
+  else if (o.region && !/^(other|unknown)$/i.test(o.region)) bits.push(o.region);
+  if (ORG_STATUS[o.status]) bits.push(ORG_STATUS[o.status]);
+  return bits.filter(Boolean).join(' · ');
+}
+function orgOpen(o){
+  const raw = Array.isArray(o.approachability) ? o.approachability : String(o.approachability || '').split(';');
+  const tags = raw.map(s => String(s).trim()).filter(t => APPROACH[t]);
+  if (!tags.length) return '';
+  return '<p class="org-open">' + tags.map(t => '<span' + (APPROACH[t][1] ? ' class="go"' : '') + '>' + esc(APPROACH[t][0]) + '</span>').join('') + '</p>';
+}
+
+/* ----------------------------------------------------------- hex marks */
+function hexInner(spec, R){
+  const rv = R - 2.2;
+  let s = '<path class="hx-fill" d="' + hexD(rv) + '"/>';
+  if (spec.cls === 'lab' || spec.cls === 'adj') s += '<path d="' + hexD(rv) + '" fill="url(#tx-' + spec.cls + ')"/>';
+  if (spec.bridge) s += '<path class="hx-bridge" d="' + hexD(Math.max(rv - 2.2, rv * 0.72)) + '"/>';
+  if (spec.mark) s += homeToken(spec.mark, R);
+  return s;
+}
+/* the home token: a small cream disc near the top of the tile, like a board-game number token */
+function homeToken(mark, R){
+  const tr = Math.max(2.6, R * 0.3), cy = -R * 0.47;
+  let s = '<circle class="tok" cx="0" cy="' + f1(cy) + '" r="' + f1(tr) + '"/>';
+  if (mark === 'field') s += '<circle class="tok-field" cx="0" cy="' + f1(cy) + '" r="' + f1(tr * 0.62) + '"/>';
+  else s += '<circle class="tok-labs" cx="0" cy="' + f1(cy) + '" r="' + f1(tr * 0.55) + '" stroke-width="' + f1(Math.max(1.1, tr * 0.28)) + '"/>';
+  return s;
+}
+function tokenIcon(mark, R){
+  const s = R + 1.5;
+  return '<svg viewBox="' + (-s) + ' ' + (-s) + ' ' + 2 * s + ' ' + 2 * s + '" aria-hidden="true" focusable="false">' +
+    '<circle class="tok" r="' + f1(R * 0.85) + '"/>' + (mark === 'field' ? '<circle class="tok-field" r="' + f1(R * 0.85 * 0.62) + '"/>' : '<circle class="tok-labs" r="' + f1(R * 0.85 * 0.55) + '" stroke-width="' + f1(R * 0.85 * 0.28) + '"/>') + '</svg>';
+}
+function miniHex(spec, R){
+  const s = R + 1.5;
+  return '<svg viewBox="' + (-s) + ' ' + (-s) + ' ' + 2 * s + ' ' + 2 * s + '" aria-hidden="true" focusable="false"><g class="s-' + spec.cls + '">' + hexInner(spec, R) + '</g></svg>';
+}
+function strip(list, r){
+  r = r || 5.5;
+  const w = SQ3 * r;
+  let g = '';
+  list.forEach((m, i) => { g += '<g class="s-' + m.st.cls + '" transform="translate(' + f1(w / 2 + i * (w + 1.2)) + ',' + f1(r) + ')">' + hexInner(specOf(m), r) + '</g>'; });
+  const W = list.length * (w + 1.2);
+  return '<svg class="strip" viewBox="0 0 ' + f1(W) + ' ' + f1(2 * r) + '" width="' + f1(W) + '" height="' + f1(2 * r) + '" aria-hidden="true">' + g + '</svg>';
+}
+
+/* ------------------------------------------------------ island shapes */
+const shapeCache = new Map();
+function islandShape(n){
+  if (shapeCache.has(n)) return shapeCache.get(n);
+  const cells = [[0,0]], set = new Set([key(0,0)]);
+  while (cells.length < n){
+    let cx = 0, cy = 0;
+    cells.forEach(c => { const p = ax(c[0], c[1], 1); cx += p[0]; cy += p[1]; });
+    cx /= cells.length; cy /= cells.length;
+    let best = null, bs = -Infinity;
+    cells.forEach(c => DIRS.forEach(d => {
+      const q = c[0] + d[0], r = c[1] + d[1];
+      if (set.has(key(q, r))) return;
+      let nb = 0; DIRS.forEach(e => { if (set.has(key(q + e[0], r + e[1]))) nb++; });
+      const p = ax(q, r, 1);
+      const sc = nb * 4 - Math.hypot(p[0] - cx, (p[1] - cy) * 1.35) - (p[1] > cy + 0.01 ? 0.05 : 0);
+      if (sc > bs + 1e-9){ bs = sc; best = [q, r]; }
+    }));
+    cells.push(best); set.add(key(best[0], best[1]));
+  }
+  const ordered = cells.slice().sort((a, b) => { const pa = ax(a[0], a[1], 1), pb = ax(b[0], b[1], 1); return (pa[0] - pb[0]) || (pa[1] - pb[1]); });
+  shapeCache.set(n, ordered);
+  return ordered;
+}
+
+/* ----------------------------------------------------------- layout */
+const anchorCache = new Map();
+function anchors(k){
+  const ck = f1(k);
+  if (anchorCache.has(ck)) return anchorCache.get(ck);
+  const out = [], N = 34;
+  for (let r = -N; r <= N; r++) for (let q = -N; q <= N; q++){ const p = ax(q, r, 1); out.push([q, r, p[0] * p[0] + (k * p[1]) * (k * p[1]), p[1], p[0]]); }
+  out.sort((a, b) => (a[2] - b[2]) || (a[3] - b[3]) || (a[4] - b[4]));
+  anchorCache.set(ck, out);
+  return out;
+}
+const hit = (a, b, m) => a.x0 - m < b.x1 && b.x0 - m < a.x1 && a.y0 - m < b.y1 && b.y0 - m < a.y1;
+function uni(a, b){ if (!a) return Object.assign({}, b); return {x0:Math.min(a.x0, b.x0), y0:Math.min(a.y0, b.y0), x1:Math.max(a.x1, b.x1), y1:Math.max(a.y1, b.y1)}; }
+function islandLabel(name, fs, maxW){
+  const font = '500 ' + fs + 'px ' + FONT;
+  const lines = wrapText(name, font, maxW);
+  return {lines, fs, w:Math.max.apply(null, lines.map(l => measure(l, font))), h:lines.length * fs * 1.18};
+}
+function placeLayer(layer, R, maxW, k, fs){
+  const w = SQ3 * R, blocked = new Set(), rects = [], islands = [];
+  let bb = null;
+  const cand = anchors(k);
+  layer.subareas.forEach(sub => {
+    const shape = islandShape(sub.nodes.length);
+    const pts = shape.map(c => ax(c[0], c[1], R));
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const sx0 = Math.min.apply(null, xs) - w / 2, sx1 = Math.max.apply(null, xs) + w / 2;
+    const sy0 = Math.min.apply(null, ys) - R, sy1 = Math.max.apply(null, ys) + R;
+    const lab = islandLabel(sub.name, fs, Math.max(sx1 - sx0 + R * 1.2, R * 6.6));
+    const lcx = (sx0 + sx1) / 2, ltop = sy1 + R * 0.4;
+    let got = null;
+    for (let pass = 0; pass < 2 && !got; pass++){
+      for (let i = 0; i < cand.length; i++){
+        const aq = cand[i][0], ar = cand[i][1];
+        let bad = false;
+        for (let j = 0; j < shape.length; j++){ if (blocked.has(key(shape[j][0] + aq, shape[j][1] + ar))){ bad = true; break; } }
+        if (bad) continue;
+        const a = ax(aq, ar, R);
+        const ib = {x0:a[0] + sx0, y0:a[1] + sy0, x1:a[0] + sx1, y1:a[1] + sy1};
+        const lb = {x0:a[0] + lcx - lab.w / 2, y0:a[1] + ltop, x1:a[0] + lcx + lab.w / 2, y1:a[1] + ltop + lab.h};
+        const nb = uni(uni(bb, ib), lb);
+        if (pass === 0 && nb.x1 - nb.x0 > maxW + 0.5) continue;
+        if (rects.some(rc => hit(rc, lb, rc.kind === 'label' ? R * 0.7 : R * 0.3))) continue;
+        const crs = shape.map(c => { const p = ax(c[0] + aq, c[1] + ar, R); return {x0:p[0] - w / 2, y0:p[1] - R, x1:p[0] + w / 2, y1:p[1] + R}; });
+        if (rects.some(rc => rc.kind === 'label' && crs.some(cr => hit(rc, cr, R * 0.3)))) continue;
+        got = {aq, ar, lb, crs, nb};
+        break;
+      }
+    }
+    const cells = shape.map(c => [c[0] + got.aq, c[1] + got.ar]);
+    cells.forEach(c => { blocked.add(key(c[0], c[1])); DIRS.forEach(d => blocked.add(key(c[0] + d[0], c[1] + d[1]))); });
+    got.crs.forEach(cr => rects.push(Object.assign({kind:'cell'}, cr)));
+    rects.push(Object.assign({kind:'label'}, got.lb));
+    bb = got.nb;
+    islands.push({sub, layer, cells:cells.map((c, i) => ({q:c[0], r:c[1], node:sub.sorted[i]})), label:{lines:lab.lines, fs:lab.fs, box:got.lb}});
+  });
+  return {layer, islands, bb};
+}
+function shiftPlaced(pl, dx, dy, R){
+  const dr = Math.round(dy / (1.5 * R)), dq = Math.round((dx - dr * SQ3 * R / 2) / (SQ3 * R));
+  const p = ax(dq, dr, R);
+  pl.islands.forEach(is => {
+    is.cells.forEach(c => { c.q += dq; c.r += dr; });
+    const b = is.label.box; is.label.box = {x0:b.x0 + p[0], y0:b.y0 + p[1], x1:b.x1 + p[0], y1:b.y1 + p[1]};
+  });
+  pl.bb = {x0:pl.bb.x0 + p[0], y0:pl.bb.y0 + p[1], x1:pl.bb.x1 + p[0], y1:pl.bb.y1 + p[1]};
+}
+function fitX(pl, x0, x1, R){
+  const w = SQ3 * R;
+  for (let g = 0; g < 4 && pl.bb.x0 < x0 && pl.bb.x1 + w <= x1; g++) shiftPlaced(pl, w, 0, R);
+  for (let g = 0; g < 4 && pl.bb.x1 > x1 && pl.bb.x0 - w >= x0; g++) shiftPlaced(pl, -w, 0, R);
+}
+function computeLayout(W){
+  const cols = M.layers.filter(l => l.slug !== FOUNDATION);
+  const found = M.layers.find(l => l.slug === FOUNDATION) || null;
+  const padX = W < 520 ? 6 : 16;
+  let mode = W >= 900 && cols.length > 0 ? 'wide' : 'stack';
+  let R = mode === 'wide' ? clamp(W / 63, 15.5, 21) : clamp(W / 17.5, 16.5, 21);
+  const gap = R * 1.8;
+  const colW = cols.length ? (W - 2 * padX - gap * (cols.length - 1)) / cols.length : 0;
+  if (mode === 'wide' && colW < R * 10.5){ mode = 'stack'; R = clamp(W / 17.5, 16.5, 21); }
+  const fs = mode === 'wide' ? 12.5 : 12;
+  const roleFits = l => measure(layerRole(l), 'italic 400 14px ' + FONT) <= colW - 16;
+  let titleH = mode === 'wide' ? 50 : 50;
+  if (mode === 'wide' && cols.some(l => !roleFits(l))) titleH = 64;
+  const placed = [], titles = [];
+  let bottom = 0;
+  if (mode === 'wide'){
+    const top = titleH + R * 0.6;
+    cols.forEach((layer, i) => {
+      const pl = placeLayer(layer, R, colW - SQ3 * R, 1.05, fs);
+      const colX = padX + i * (colW + gap);
+      shiftPlaced(pl, colX + (colW - (pl.bb.x1 - pl.bb.x0)) / 2 - pl.bb.x0, top - pl.bb.y0, R);
+      fitX(pl, colX - gap * 0.3, colX + colW + gap * 0.3, R);
+      placed.push(pl);
+      titles.push({layer, x:colX + colW / 2, y:10, anchor:'middle', w:colW});
+      bottom = Math.max(bottom, pl.bb.y1);
+    });
+    if (found){
+      const pl = placeLayer(found, R, W - 2 * padX - SQ3 * R, 6, fs);
+      const tY = bottom + R * 1.7;
+      shiftPlaced(pl, padX + (W - 2 * padX - (pl.bb.x1 - pl.bb.x0)) / 2 - pl.bb.x0, tY + 50 + R * 0.4 - pl.bb.y0, R);
+      fitX(pl, 2, W - 2, R);
+      placed.push(pl);
+      titles.push({layer:found, x:W / 2, y:tY, anchor:'middle', w:W, rule:true});
+      bottom = pl.bb.y1;
+    }
+  } else {
+    const order = cols.concat(found ? [found] : []);
+    let y = 8;
+    const k = W > 560 ? clamp(W / 380, 1, 2.4) : 1;
+    order.forEach((layer, i) => {
+      const pl = placeLayer(layer, R, W - 2 * padX - SQ3 * R, k, fs);
+      shiftPlaced(pl, padX + (W - 2 * padX - (pl.bb.x1 - pl.bb.x0)) / 2 - pl.bb.x0, y + titleH + R * 0.3 - pl.bb.y0, R);
+      fitX(pl, 2, W - 2, R);
+      placed.push(pl);
+      titles.push({layer, x:padX + 6, y, anchor:'start', w:W, rule:i > 0});
+      y = pl.bb.y1 + R * 1.6;
+      bottom = pl.bb.y1;
+    });
+  }
+  return {W, H:Math.ceil(bottom + R * 1.3), R, mode, fs, placed, titles};
+}
+
+/* ------------------------------------------------------------ render */
+const svg = $('#map'), wrap = $('#map-wrap'), panel = $('#panel'), tip = $('#tip'), chart = $('#chart');
+let LAY = null, WORLD = null, SCREEN = null;
+let cellPos = new Map(), islands = [], islandOfSub = new Map(), kbdSlug = null;
+const state = {level:'overview', slug:null, filter:null, links:false, hover:null, focus:null, from:null};
+let cam = {k:1, tx:0, ty:0}, camRaf = 0, savedScroll = null;
+
+function render(){
+  if (!M) return;
+  const W = Math.floor(wrap.clientWidth);
+  if (!W) return;
+  const L = computeLayout(W);
+  LAY = L;
+  document.body.classList.toggle('map-stack', L.mode === 'stack');
+  const R = L.R, w = SQ3 * R;
+  cellPos = new Map(); islandOfSub = new Map(); islands = [];
+  L.placed.forEach(pl => pl.islands.forEach(is => islands.push(is)));
+  islands.forEach((is, ii) => {
+    let sx = 0, sy = 0, bb = null;
+    is.cells.forEach(c => {
+      const p = ax(c.q, c.r, R); c.x = p[0]; c.y = p[1]; sx += c.x; sy += c.y;
+      bb = uni(bb, {x0:c.x - w / 2, y0:c.y - R, x1:c.x + w / 2, y1:c.y + R});
+      cellPos.set(c.node.slug, {x:c.x, y:c.y, island:ii});
+    });
+    is.cx = sx / is.cells.length; is.cy = sy / is.cells.length;
+    is.bb = uni(bb, is.label.box);
+    islandOfSub.set(is.sub.slug, is);
+  });
+
+  /* depth bands: shoal hugs each island and its name; a paler shelf one hex further out, edged with a contour */
+  const near = new Set(), land = new Set();
+  islands.forEach(is => is.cells.forEach(c => { land.add(key(c.q, c.r)); near.add(key(c.q, c.r)); DIRS.forEach(d => near.add(key(c.q + d[0], c.r + d[1]))); }));
+  islands.forEach(is => {
+    const bx = is.label.box;
+    const r0 = Math.floor((bx.y0 - R) / (1.5 * R)), r1 = Math.ceil((bx.y1 + R) / (1.5 * R));
+    for (let r = r0; r <= r1; r++){
+      const q0 = Math.floor((bx.x0 - w) / w - r / 2), q1 = Math.ceil((bx.x1 + w) / w - r / 2);
+      for (let q = q0; q <= q1; q++){
+        const p = ax(q, r, R);
+        if (p[0] < bx.x0 - w * 0.2 || p[0] > bx.x1 + w * 0.2 || p[1] < bx.y0 - R * 0.35 || p[1] > bx.y1 + R * 0.35) continue;
+        near.add(key(q, r));
+      }
+    }
+  });
+  const far = new Set();
+  near.forEach(k => { const [q, r] = k.split(',').map(Number); DIRS.forEach(d => { const kk = key(q + d[0], r + d[1]); if (!near.has(kk)) far.add(kk); }); });
+  const cellsD = set => { let d = ''; set.forEach(k => { const [q, r] = k.split(',').map(Number); const p = ax(q, r, R); d += hexAt(p[0], p[1], R + 0.6); }); return d; };
+  const farAll = new Set(near); far.forEach(k => farAll.add(k));
+  const farD = cellsD(farAll), nearD = cellsD(near);
+
+  let coasts = '', cells = '', labels = '';
+  islands.forEach(is => {
+    let outer = '', inner = '';
+    is.cells.forEach(c => { outer += hexAt(c.x, c.y, R + 3.4); inner += hexAt(c.x, c.y, R + 2.2); });
+    coasts += '<path class="coast" d="' + outer + '"/><path class="coast-in" style="fill:var(--frame)" d="' + inner + '"/>';
+    is.cells.forEach(c => {
+      const n = c.node, spec = specOf(n);
+      cells += '<g class="hex s-' + spec.cls + '" data-slug="' + esc(n.slug) + '" transform="translate(' + f1(c.x) + ',' + f1(c.y) + ')" tabindex="-1" role="button" aria-label="' + esc(ariaFor(n)) + '">' + hexInner(spec, R) + '</g>';
+    });
+    const b = is.label.box, fs = is.label.fs, lh = fs * 1.18;
+    labels += '<text class="isl-label" data-sub="' + esc(is.sub.slug) + '" font-size="' + fs + '" text-anchor="middle">' +
+      is.label.lines.map((ln, j) => '<tspan x="' + f1((b.x0 + b.x1) / 2) + '" y="' + f1(b.y0 + fs * 0.9 + j * lh) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
+  });
+
+  let titles = '';
+  L.titles.forEach(t => {
+    const layer = t.layer, nameFs = L.mode === 'wide' ? 16 : 15, role = layerRole(layer), x = t.x;
+    if (t.rule) titles += '<line class="layer-rule" x1="0" x2="' + f1(L.W) + '" y1="' + f1(t.y - R * 0.7) + '" y2="' + f1(t.y - R * 0.7) + '"/>';
+    const fits = measure(role, 'italic 400 14px ' + FONT) <= t.w - 16;
+    const roleLines = fits ? [role] : wrapText(role, 'italic 400 14px ' + FONT, t.w - 16);
+    const tw = Math.max(measure(layer.name.toUpperCase(), '600 ' + nameFs + 'px ' + FONT) * 1.2, measure(role, 'italic 400 14px ' + FONT)) + 16;
+    const hx = t.anchor === 'middle' ? x - tw / 2 : x - 6;
+    t.box = {x0:hx, y0:t.y - 2, x1:hx + tw, y1:t.y + 18 + roleLines.length * 18};
+    titles += '<g class="layer-title" data-layer="' + esc(layer.slug) + '"><rect class="hit" x="' + f1(hx) + '" y="' + f1(t.y - 2) + '" width="' + f1(tw) + '" height="' + (20 + roleLines.length * 18) + '"/>' +
+      '<text class="layer-name" x="' + f1(x) + '" y="' + f1(t.y + nameFs) + '" font-size="' + nameFs + '" text-anchor="' + t.anchor + '">' + esc(layer.name) + '</text>' +
+      roleLines.map((ln, j) => '<text class="layer-role" x="' + f1(x) + '" y="' + f1(t.y + nameFs + 19 + j * 17) + '" font-size="14" text-anchor="' + t.anchor + '">' + esc(ln) + '</text>').join('') + '</g>';
+  });
+
+  svg.setAttribute('viewBox', '0 0 ' + L.W + ' ' + L.H);
+  svg.setAttribute('width', L.W);
+  svg.setAttribute('height', L.H);
+  svg.innerHTML =
+    '<g id="world">' +
+      '<path class="far" d="' + farD + '"/><path class="far-fill" d="' + farD + '"/><path class="near" d="' + nearD + '"/>' +
+      '<g class="alllinks"></g>' +
+      '<g class="coasts">' + coasts + '</g>' +
+      '<g class="islands">' + cells + '</g>' +
+      '<g class="ov"><g class="sellinks"></g></g>' +
+      '<g class="labels">' + labels + '</g>' +
+      '<g class="titles">' + titles + '</g>' +
+      '<g class="ov"><g class="rings"></g></g>' +
+    '</g><g class="screen" id="screen"></g>';
+  WORLD = $('#world', svg); SCREEN = $('#screen', svg);
+  svg.querySelectorAll('.hex').forEach(el => { const p = cellPos.get(el.dataset.slug); if (p) p.el = el; });
+  const first = kbdSlug && cellPos.has(kbdSlug) ? kbdSlug : (M.layers[0] && M.layers[0].subareas[0].sorted[0].slug);
+  setRoving(first);
+  drawGrid();
+  drawAllLinks();
+  paint();
+  moveCamera(true);
+}
+
+/* grid references along the neatline, as on an atlas plate (wide layout only) */
+function drawGrid(){
+  const top = $('#grid-top'), left = $('#grid-left');
+  if (!LAY || LAY.mode !== 'wide'){ top.innerHTML = ''; left.innerHTML = ''; islands.forEach(is => { is.ref = ''; is.sub.ref = ''; }); return; }
+  const cols = clamp(Math.round(LAY.W / 150), 4, 12), rows = clamp(Math.round(LAY.H / 150), 3, 9);
+  const cw = LAY.W / cols, rh = LAY.H / rows;
+  let t = '', l = '';
+  for (let i = 0; i < cols; i++){ t += '<span style="left:' + ((i + 0.5) / cols * 100).toFixed(3) + '%">' + String.fromCharCode(65 + i) + '</span>'; if (i) t += '<i style="left:' + (i / cols * 100).toFixed(3) + '%"></i>'; }
+  for (let j = 0; j < rows; j++){ l += '<span style="top:' + ((j + 0.5) * rh).toFixed(1) + 'px">' + (j + 1) + '</span>'; if (j) l += '<i style="top:' + (j * rh).toFixed(1) + 'px"></i>'; }
+  top.innerHTML = t; left.innerHTML = l; left.style.height = LAY.H + 'px';
+  islands.forEach(is => {
+    const i = clamp(Math.floor(is.cx / cw), 0, cols - 1), j = clamp(Math.floor(is.cy / rh), 0, rows - 1);
+    is.ref = is.sub.ref = String.fromCharCode(65 + i) + (j + 1);
+  });
+}
+function curve(x1, y1, x2, y2, bend, trim){
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1, s = dx >= 0 ? 1 : -1;
+  const cx = mx - dy * bend * s, cy = my + dx * bend * s;
+  if (trim){
+    if (len < trim * 2.05) return '';
+    const ua = Math.hypot(cx - x1, cy - y1) || 1, ub = Math.hypot(cx - x2, cy - y2) || 1;
+    x1 += (cx - x1) / ua * trim; y1 += (cy - y1) / ua * trim; x2 += (cx - x2) / ub * trim; y2 += (cy - y2) / ub * trim;
+  }
+  return 'M' + f1(x1) + ',' + f1(y1) + 'Q' + f1(cx) + ',' + f1(cy) + ' ' + f1(x2) + ',' + f1(y2);
+}
+/* the org edges are the source of truth for counts; fall back to the node's own count when no org data is loaded */
+const mainCount = n => (M && M.orgs && M.orgs.size) ? n.main.length : n.primary;
+function ariaFor(n){
+  if (n.v2) return n.name + '. Capacity ' + n.st.label.toLowerCase() + ': ' + n.st.short.toLowerCase() + '.' + (n.mark ? ' ' + MARK[n.mark].label + '.' : '') + ' ' + plural(mainCount(n), 'organisation') + ' with it as a main line of work. ' + n.sub.name + ', ' + n.layer.name + '.';
+  let s = n.name + '. ' + n.st.label + ': ' + n.st.short.toLowerCase() + '.';
+  if (n.bridge === 'bridge-needed') s += ' Bridge needed.';
+  s += ' ' + plural(mainCount(n), 'organisation') + ' with it as a main line of work. ' + n.sub.name + ', ' + n.layer.name + '.';
+  return s;
+}
+function drawAllLinks(){
+  const g = $('.alllinks', svg); if (!g) return;
+  if (!state.links){ g.innerHTML = ''; return; }
+  const lit = (state.filter || state.level !== 'overview') ? focusSet() : null;
+  let d = '';
+  M.links.forEach(([a, b]) => {
+    if (lit && !(lit.has(a) || lit.has(b))) return;
+    const A = cellPos.get(a), B = cellPos.get(b); if (A && B) d += curve(A.x, A.y, B.x, B.y, 0.14);
+  });
+  g.innerHTML = '<path d="' + d + '"/>';
+}
+
+/* ------------------------------------------------------------ what is lit */
+function focusSet(){
+  const on = new Set(), v = state;
+  if (v.level === 'node'){ const n = M.nodes.get(v.slug); on.add(n.slug); n.related.forEach(r => on.add(r)); }
+  else if (v.level === 'org'){ M.orgs.get(v.slug).edges.forEach(e => on.add(e.node.slug)); }
+  else if (v.level === 'area'){ M.subs.get(v.slug).nodes.forEach(n => on.add(n.slug)); }
+  else if (v.level === 'layer'){ layerNodes(M.layerBy.get(v.slug)).forEach(n => on.add(n.slug)); }
+  else if (v.filter){ M.nodes.forEach(n => { if (matchFilter(n, v.filter)) on.add(n.slug); }); }
+  return on;
+}
+function matchFilter(n, f){
+  if (f.type === 'lens') return n.lenses.indexOf(f.key) >= 0;
+  if (f.type === 'cap') return n.st.key === f.key;
+  if (f.type === 'mark') return n.mark === f.key;
+  if (f.type === 'status') return n.st.key === f.key;
+  if (f.type === 'bridge') return n.bridge === f.key;
+  if (f.type === 'adjcover') return n.st.key === 'adjacent-field' && n.bridge !== 'bridge-needed';
+  return false;
+}
+function paint(){
+  if (!LAY) return;
+  const on = focusSet();
+  svg.classList.toggle('has-focus', state.level !== 'overview' || !!state.filter);
+  svg.classList.toggle('lv-node', state.level === 'node');
+  svg.classList.toggle('lv-org', state.level === 'org');
+  const onIsl = new Set();
+  cellPos.forEach((p, slug) => {
+    if (!p.el) return;
+    const isOn = on.has(slug);
+    p.el.classList.toggle('is-on', isOn);
+    p.el.setAttribute('aria-pressed', state.level === 'node' && slug === state.slug ? 'true' : 'false');
+    if (isOn) onIsl.add(islands[p.island].sub.slug);
+  });
+  svg.querySelectorAll('.isl-label').forEach(t => t.classList.toggle('is-on', onIsl.has(t.dataset.sub)));
+  const onLayers = new Set(); onIsl.forEach(s => onLayers.add(M.subs.get(s).layer.slug));
+  svg.querySelectorAll('.layer-title').forEach(t => t.classList.toggle('is-on', onLayers.has(t.dataset.layer)));
+  drawSelLinks();
+  drawRings();
+}
+function drawSelLinks(){
+  const g = $('.sellinks', svg); if (!g) return;
+  const slug = state.level === 'node' ? state.slug : (state.links && state.hover ? state.hover : null);
+  if (!slug){ g.innerHTML = ''; return; }
+  const n = M.nodes.get(slug), a = cellPos.get(n.slug), R = LAY.R;
+  let halo = '', lines = '';
+  n.related.forEach(r => {
+    const b = cellPos.get(r); if (!b) return;
+    const d = curve(a.x, a.y, b.x, b.y, 0.2, R * 1.02); if (!d) return;
+    halo += '<path class="lk-halo" d="' + d + '"/>'; lines += '<path class="lk" d="' + d + '"/>';
+  });
+  g.innerHTML = halo + lines;
+}
+function drawRings(){
+  const g = $('.rings', svg); if (!g) return;
+  const R = LAY.R;
+  let s = '';
+  const ring = (slug, cls) => { const p = cellPos.get(slug); if (p) s += '<path class="' + cls + '" transform="translate(' + f1(p.x) + ',' + f1(p.y) + ')" d="' + hexD(R + 1.6) + '"/>'; };
+  if (state.level === 'node'){ const n = M.nodes.get(state.slug); n.related.forEach(r => ring(r, 'ring-rel')); ring(n.slug, 'ring-sel'); }
+  if (state.level === 'org'){ M.orgs.get(state.slug).edges.forEach(e => ring(e.node.slug, e.main ? 'ring-rel' : 'ring-sec')); }
+  if (state.hover && !(state.level === 'node' && state.hover === state.slug) && state.hover !== state.focus) ring(state.hover, 'ring-hov');
+  if (state.focus) ring(state.focus, 'ring-foc');
+  g.innerHTML = s;
+}
+
+/* ------------------------------------------------------------ camera (wide layout only) */
+function panelWidth(){
+  if (!LAY || LAY.mode !== 'wide') return 0;
+  /* with panel:false the host can say how much of the map's right side its own panel covers */
+  if (!OPTS.panel){ const r = typeof OPTS.reserveRight === 'function' ? OPTS.reserveRight(state.level) : OPTS.reserveRight; return state.level === 'overview' ? 0 : Math.max(0, +r || 0); }
+  return !panel.hidden ? panel.offsetWidth + 20 : 0;
+}
+function targetCamera(){
+  const I = {k:1, tx:0, ty:0};
+  if (!LAY || LAY.mode !== 'wide' || state.level === 'overview') return I;
+  const R = LAY.R, w = SQ3 * R;
+  let bb = null, kMax = 1.6;
+  const addCell = slug => { const p = cellPos.get(slug); if (p) bb = uni(bb, {x0:p.x - w, y0:p.y - R * 1.3, x1:p.x + w, y1:p.y + R * 1.3}); };
+  if (state.level === 'layer'){ islands.forEach(is => { if (is.layer.slug === state.slug) bb = uni(bb, is.bb); }); kMax = 1.5; }
+  else if (state.level === 'area'){
+    const is = islandOfSub.get(state.slug);
+    bb = {x0:is.bb.x0 - R * 1.6, y0:is.bb.y0 - R * 1.6, x1:is.bb.x1 + R * 1.6, y1:is.bb.y1 + R * 0.8};
+    kMax = clamp(54 / R, 1.6, 2.8);
+  } else if (state.level === 'node'){
+    const n = M.nodes.get(state.slug);
+    bb = uni(null, islands[cellPos.get(n.slug).island].bb);
+    n.related.forEach(addCell);
+    bb = {x0:bb.x0 - R * 2.5, y0:bb.y0 - R * 1.4, x1:bb.x1 + R * 5.5, y1:bb.y1 + R * 1.4};
+    kMax = 2.2;
+  } else if (state.level === 'org'){
+    M.orgs.get(state.slug).edges.forEach(e => addCell(e.node.slug));
+    if (bb) bb = {x0:bb.x0 - R * 4, y0:bb.y0 - R * 2.5, x1:bb.x1 + R * 6, y1:bb.y1 + R * 2.5};
+    kMax = 1.6;
+  }
+  if (!bb) return I;
+  const rx0 = 10, ry0 = 10, rx1 = LAY.W - panelWidth() - 10, ry1 = Math.min(LAY.H, window.innerHeight - 16) - 10;
+  const k = clamp(Math.min((rx1 - rx0) / (bb.x1 - bb.x0), (ry1 - ry0) / (bb.y1 - bb.y0)), 0.55, kMax);
+  return {k, tx:(rx0 + rx1) / 2 - k * (bb.x0 + bb.x1) / 2, ty:(ry0 + ry1) / 2 - k * (bb.y0 + bb.y1) / 2};
+}
+function setCam(c){
+  cam = c;
+  if (WORLD) WORLD.setAttribute('transform', 'translate(' + f1(c.tx) + ',' + f1(c.ty) + ') scale(' + c.k.toFixed(4) + ')');
+  const z = c.k > 1.3;
+  svg.classList.toggle('zoomed', z);
+  chart.classList.toggle('zoomed', state.level !== 'overview');
+}
+function moveCamera(instant){
+  const t = targetCamera();
+  cancelAnimationFrame(camRaf);
+  if (SCREEN) SCREEN.innerHTML = '';
+  const same = Math.abs(t.k - cam.k) < 1e-3 && Math.abs(t.tx - cam.tx) < 0.5 && Math.abs(t.ty - cam.ty) < 0.5;
+  if (instant || reduceMotion() || same){ setCam(t); drawScreen(); return; }
+  const a = Object.assign({}, cam), t0 = performance.now(), D = 560;
+  const step = now => {
+    const p = Math.min(1, (now - t0) / D), e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    setCam({k:a.k * Math.pow(t.k / a.k, e), tx:a.tx + (t.tx - a.tx) * e, ty:a.ty + (t.ty - a.ty) * e});
+    if (p < 1) camRaf = requestAnimationFrame(step); else drawScreen();
+  };
+  camRaf = requestAnimationFrame(step);
+}
+const toScreen = (x, y) => [cam.tx + cam.k * x, cam.ty + cam.k * y];
+
+function drawScreen(){
+  if (!SCREEN || !LAY) return;
+  let s = '';
+  const R = LAY.R, r = R * cam.k;
+  if (state.level === 'area' && LAY.mode === 'wide' && r >= 34){
+    islandOfSub.get(state.slug).cells.forEach(c => {
+      const [sx, sy] = toScreen(c.x, c.y);
+      let fs = clamp(r * 0.23, 11, 13), lines, font;
+      for (let tries = 0; tries < 3; tries++){
+        font = '500 ' + fs + 'px ' + FONT;
+        lines = wrapText(c.node.name, font, r * 1.5);
+        if (lines.length * fs * 1.14 <= r * (c.node.mark ? 0.86 : 1.35)) break;
+        fs -= 1;
+      }
+      const maxLines = Math.max(1, Math.floor(r * (c.node.mark ? 0.9 : 1.4) / (fs * 1.14)));
+      if (lines.length > maxLines){ lines = lines.slice(0, maxLines); lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, '') + '…'; }
+      const lh = fs * 1.14, y0 = sy + (c.node.mark ? r * 0.36 : 0) - (lines.length - 1) * lh / 2;
+      s += '<text class="nm s-' + c.node.st.cls + '" font-size="' + f1(fs) + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(y0 + j * lh) + '" dominant-baseline="central">' + esc(ln) + '</tspan>').join('') + '</text>';
+    });
+  }
+  if (cam.k > 1.3) s += screenLabels();
+  if (state.level === 'node' || state.level === 'org') s += tags();
+  SCREEN.innerHTML = s;
+}
+function screenLabels(){
+  const on = focusSet(), fs = LAY.fs, x1 = LAY.W - panelWidth();
+  let out = '';
+  islands.forEach(is => {
+    let lo = -Infinity; is.cells.forEach(c => { lo = Math.max(lo, c.y); });
+    const [sx, sy] = toScreen((is.label.box.x0 + is.label.box.x1) / 2, lo + LAY.R);
+    if (sx < -60 || sx > x1 + 60 || sy < -20 || sy > LAY.H + 20) return;
+    const lit = is.cells.some(c => on.has(c.node.slug));
+    const lines = wrapText(is.sub.name, '500 ' + fs + 'px ' + FONT, 150);
+    out += '<text class="sl ' + (lit ? 'on' : 'dim') + '" font-size="' + fs + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(sy + 6 + fs * 0.9 + j * fs * 1.18) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
+  });
+  return out;
+}
+/* names beside the lit hexes, placed to avoid each other, the hexes and island names */
+function tags(){
+  let list;
+  if (state.level === 'node'){ const n = M.nodes.get(state.slug); list = [n].concat(Array.from(n.related).map(x => M.nodes.get(x)).filter(Boolean)); }
+  else list = M.orgs.get(state.slug).edges.map(e => e.node);
+  const R = LAY.R, r = R * cam.k, x1 = LAY.W - panelWidth() - 4, placed = [], hexes = [];
+  list.forEach(m => { const p = cellPos.get(m.slug); if (p){ const [hx, hy] = toScreen(p.x, p.y); hexes.push({x0:hx - r * 0.85, y0:hy - r * 0.95, x1:hx + r * 0.85, y1:hy + r * 0.95}); } });
+  const names = islands.map(is => is.label.box).concat(LAY.titles.map(t => t.box).filter(Boolean)).map(bx => { const a = toScreen(bx.x0, bx.y0), z = toScreen(bx.x1, bx.y1); return {x0:a[0], y0:a[1], x1:z[0], y1:z[1]}; });
+  let out = '';
+  list.forEach((m, i) => {
+    const p = cellPos.get(m.slug); if (!p) return;
+    const [sx, sy] = toScreen(p.x, p.y), sel = state.level === 'node' && i === 0;
+    const fsz = sel ? 14 : 13, font = (sel ? '700 ' : '500 ') + fsz + 'px ' + FONT;
+    const w = measure(m.name, font) + 6, h = fsz + 6, gap = 5;
+    const cands = [[sx + r * 0.9 + gap, sy - h / 2], [sx - r * 0.9 - gap - w, sy - h / 2], [sx - w / 2, sy + r + 2], [sx - w / 2, sy - r - 2 - h],
+                   [sx + r * 0.6, sy - r - h], [sx + r * 0.6, sy + r], [sx - r * 0.6 - w, sy - r - h], [sx - r * 0.6 - w, sy + r]];
+    let at = null;
+    for (let pass = 0; pass < (sel ? 3 : state.level === 'org' ? 1 : 2) && !at; pass++){
+      for (const [x, y] of cands){
+        const b = {x0:x, y0:y, x1:x + w, y1:y + h};
+        if (b.x0 < 4 || b.x1 > x1 || b.y0 < 4 || b.y1 > LAY.H - 4) continue;
+        if (pass < 2 && (placed.some(o => hit(o, b, 2)) || hexes.some(o => hit(o, b, 1)))) continue;
+        if (pass < 1 && names.some(o => hit(o, b, 1))) continue;
+        at = b; break;
+      }
+    }
+    if (!at) return;
+    placed.push(at);
+    out += '<text class="tag' + (sel ? ' sel' : '') + '" x="' + f1(at.x0 + 3) + '" y="' + f1(at.y0 + h - 5) + '">' + esc(m.name) + '</text>';
+  });
+  return out;
+}
+
+/* ------------------------------------------------------------ navigation */
+function navigate(level, slug, o){
+  o = o || {};
+  if (level === 'node' && !M.nodes.has(slug)) level = 'overview';
+  if (level === 'area' && !M.subs.has(slug)) level = 'overview';
+  if (level === 'layer' && !M.layerBy.has(slug)) level = 'overview';
+  if (level === 'org' && !M.orgs.has(slug)) level = 'overview';
+  if (level === 'overview') slug = null;
+  const prevNode = state.level === 'node' ? state.slug : null;
+  const changed = level !== state.level || slug !== state.slug;
+  if (level === 'org' && state.level !== 'org' && state.level !== 'overview') state.from = {level:state.level, slug:state.slug};
+  else if (level !== 'org' || (state.level === 'org' && slug !== state.slug)) state.from = null;
+  state.level = level; state.slug = slug;
+  if (level !== 'overview') state.filter = null;
+  syncKey(); syncLayers();
+  renderPanel();
+  paint();
+  drawAllLinks();
+  moveCamera(!!o.instant);
+  $('#home-btn').hidden = level === 'overview';
+  if (level === 'node') setRoving(slug);
+  if (!o.fromHash && changed) writeHash();
+  if (LAY && LAY.mode === 'stack' && level !== 'overview' && !o.noScroll) revealOnStack();
+  if (LAY && LAY.mode === 'wide' && level !== 'overview' && !o.noScroll){
+    const top = chart.getBoundingClientRect().top;
+    if (top > 24 || top < -8){ if (savedScroll == null) savedScroll = window.scrollY; window.scrollBy({top:top - 8, behavior: reduceMotion() ? 'auto' : 'smooth'}); }
+  }
+  if (level === 'overview' && savedScroll != null){ window.scrollTo({top:savedScroll, behavior: reduceMotion() ? 'auto' : 'smooth'}); savedScroll = null; }
+  const nodeSlug = level === 'node' ? slug : null;
+  if (nodeSlug !== prevNode){ try { if (typeof window.onNodeSelect === 'function') window.onNodeSelect(nodeSlug); } catch (e){ console.error(e); } }
+  if (changed) document.dispatchEvent(new CustomEvent('fieldmap:navigate', {detail:{level, slug}}));
+}
+function parentOf(){
+  if (state.level === 'org') return state.from ? [state.from.level, state.from.slug] : ['overview', null];
+  if (state.level === 'node') return ['area', M.nodes.get(state.slug).sub.slug];
+  if (state.level === 'area') return ['layer', M.subs.get(state.slug).layer.slug];
+  return ['overview', null];
+}
+function goUp(){ const p = parentOf(); navigate(p[0], p[1]); }
+function writeHash(){
+  if (!OPTS.hash) return;
+  const h = state.level === 'overview' ? '#map' : '#map/' + state.level + '/' + encodeURIComponent(state.slug);
+  if (location.hash === h || (!location.hash && h === '#map')) return;
+  location.hash = h;
+}
+function readHash(){
+  const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+  for (const lv of ['node', 'org', 'area', 'layer']){ const i = parts.indexOf(lv); if (i >= 0 && parts[i + 1]) return [lv, parts[i + 1]]; }
+  return ['overview', null];
+}
+if (OPTS.hash) window.addEventListener('hashchange', () => { const [lv, s] = readHash(); if (lv !== state.level || s !== state.slug) navigate(lv, s, {fromHash:true}); });
+function revealOnStack(){
+  let el = null;
+  if (state.level === 'node') el = cellPos.get(state.slug) && cellPos.get(state.slug).el;
+  else if (state.level === 'area') el = svg.querySelector('.isl-label[data-sub="' + CSS.escape(state.slug) + '"]');
+  else if (state.level === 'layer') el = svg.querySelector('.layer-title[data-layer="' + CSS.escape(state.slug) + '"]');
+  else if (state.level === 'org'){ const e = M.orgs.get(state.slug).edges[0]; el = e && cellPos.get(e.node.slug) && cellPos.get(e.node.slug).el; }
+  if (!el) return;
+  requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect(), room = window.innerHeight - (panel.hidden ? 0 : panel.offsetHeight);
+    if (r.top < 12 || r.bottom > room - 12) window.scrollBy({top:r.top - Math.max(16, (room - r.height) / 2.4), behavior: reduceMotion() ? 'auto' : 'smooth'});
+  });
+}
+
+/* ------------------------------------------------------------ panel */
+function crumbs(){
+  const out = [['overview', null, 'Whole map']];
+  let layer = null, sub = null, node = null;
+  if (state.level === 'layer') layer = M.layerBy.get(state.slug);
+  if (state.level === 'area'){ sub = M.subs.get(state.slug); layer = sub.layer; }
+  if (state.level === 'node'){ node = M.nodes.get(state.slug); sub = node.sub; layer = sub.layer; }
+  /* the open item is the panel title, so the breadcrumb stops at its parent */
+  if (layer && state.level !== 'layer') out.push(['layer', layer.slug, layer.name]);
+  if (sub && state.level !== 'area') out.push(['area', sub.slug, sub.name]);
+  if (state.level === 'org' && state.from){
+    const f = state.from, nm = f.level === 'node' ? M.nodes.get(f.slug).name : f.level === 'area' ? M.subs.get(f.slug).name : f.level === 'layer' ? M.layerBy.get(f.slug).name : '';
+    if (nm) out.push([f.level, f.slug, nm]);
+  }
+  return out.map((c, i) => '<span class="step"><button type="button" data-nav="' + c[0] + (c[1] ? ':' + esc(c[1]) : '') + '">' + esc(c[2]) + '</button>' + (i < out.length - 1 ? '<span class="sep" aria-hidden="true">/</span>' : '') + '</span>').join('');
+}
+function renderPanel(){
+  const on = OPTS.panel && state.level !== 'overview';
+  document.body.classList.toggle('has-panel', on);
+  if (!on){ panel.hidden = true; panel.innerHTML = ''; return; }
+  let h = '<div class="pn-top"><nav class="crumbs" aria-label="Where you are">' + crumbs() + '</nav>' +
+    '<button class="pn-close" type="button" data-nav="overview" aria-label="Back to the whole map"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>';
+  if (state.level === 'layer') h += layerPanel(M.layerBy.get(state.slug));
+  else if (state.level === 'area') h += areaPanel(M.subs.get(state.slug));
+  else if (state.level === 'org') h += orgPanel(M.orgs.get(state.slug));
+  else h += nodePanel(M.nodes.get(state.slug));
+  panel.innerHTML = h;
+  panel.hidden = false;
+  panel.scrollTop = 0;
+}
+function summary(nodes){
+  if (nodes.length && nodes[0].v2){
+    const c = {}; CAPACITY.forEach(k => { c[k.key] = 0; }); let labs = 0, field = 0;
+    nodes.forEach(n => { if (c[n.st.key] != null) c[n.st.key]++; if (n.mark === 'labs') labs++; if (n.mark === 'field') field++; });
+    const parts = [];
+    if (c.none) parts.push(c.none + ' with nobody on it yet');
+    if (c.thin) parts.push(c.thin + ' with a little work');
+    if (c.active) parts.push(c.active + ' active');
+    if (c.busy) parts.push(c.busy + ' busy');
+    const held = [];
+    if (field) held.push(field + ' held by another field');
+    if (labs) held.push(labs + ' only in frontier labs');
+    return plural(nodes.length, 'problem') + ': ' + parts.join(', ') + '.' + (held.length ? ' ' + held.join(', ').replace(/^./, m => m.toUpperCase()) + '.' : '');
+  }
+  const c = {gap:0, nas:0, busy:0, other:0};
+  nodes.forEach(n => { if (n.st.group === 'gap') c.gap++; else if (n.st.cls === 'nas') c.nas++; else if (n.st.group === 'busy') c.busy++; else c.other++; });
+  const parts = [];
+  if (c.gap) parts.push(c.gap + ' with no independent organisation');
+  if (c.nas) parts.push(c.nas + ' with one or two');
+  if (c.busy) parts.push(c.busy + ' with several or more');
+  if (c.other) parts.push(c.other + ' held by another field');
+  return plural(nodes.length, 'problem') + ': ' + parts.join(', ') + '.';
+}
+function orgRows(list, limit, id){
+  const shown = list.slice(0, limit);
+  let h = '<ul class="rows plain">' + shown.map(r =>
+    '<li><button type="button" data-nav="org:' + esc(r.org.org_id) + '"><span class="rw"><span class="t">' + esc(r.org.name) + '</span><small>' + esc(orgMeta(r.org)) + '</small></span><span class="rn">' +
+    (r.main ? r.main + ' main' : '') + (r.main && r.side ? ', ' : '') + (r.side ? r.side + ' side' : '') + '</span></button></li>').join('') + '</ul>';
+  if (list.length > limit) h += '<button class="showall" type="button" data-more="' + id + '">Show all ' + list.length + '</button>';
+  return h;
+}
+function layerPanel(layer){
+  const ns = layerNodes(layer), who = orgsIn(ns);
+  return '<h2>' + esc(layer.name) + '</h2><p class="pn-role">' + esc(layerRole(layer)) + '</p>' +
+    '<p class="pn-sum">' + esc(summary(ns)) + '</p>' +
+    (layer.definition ? '<p class="pn-def">' + esc(layer.definition) + '</p>' : '') +
+    '<h3>Sub-areas <span class="n">' + layer.subareas.length + '</span></h3><ul class="rows plain">' +
+    layer.subareas.map(s => '<li><button type="button" data-nav="area:' + esc(s.slug) + '"><span class="rw"><span class="t">' + esc(s.name) + '</span>' + strip(s.sorted, 6.5) + '</span><span class="rn">' + (s.ref || '') + '</span></button></li>').join('') + '</ul>' +
+    (who.length ? '<h3>Most active organisations <span class="n">' + who.length + ' in this layer</span></h3>' + orgRows(who, 8, 'layer') : '');
+}
+function areaPanel(sub){
+  const sibs = sub.layer.subareas, i = sibs.indexOf(sub), prev = sibs[i - 1], next = sibs[i + 1], who = orgsIn(sub.nodes);
+  return '<h2>' + esc(sub.name) + '</h2>' +
+    '<p class="pn-sum">' + (sub.ref ? 'Grid ' + sub.ref + '. ' : '') + esc(summary(sub.nodes)) + '</p>' +
+    (sub.definition ? '<p class="pn-def">' + esc(sub.definition) + '</p>' : '') +
+    '<h3>Problems <span class="n">organisations on each</span></h3><ul class="rows">' +
+    sub.sorted.map(n => '<li><button type="button" data-nav="node:' + esc(n.slug) + '">' + miniHex(specOf(n), 8) +
+      '<span class="rw"><span class="t">' + esc(n.name) + '</span><small>' + esc(statusLine(n)) + '</small></span><span class="rn">' + (n.main.length + n.side.length) + '</span></button></li>').join('') + '</ul>' +
+    (who.length ? '<h3>Who works here <span class="n">' + plural(who.length, 'organisation') + '</span></h3>' + orgRows(who, 10, 'area') : '') +
+    '<div class="pn-sib">' + (prev ? '<button type="button" data-nav="area:' + esc(prev.slug) + '">← ' + esc(prev.name) + '</button>' : '<span></span>') +
+      (next ? '<button type="button" data-nav="area:' + esc(next.slug) + '">' + esc(next.name) + ' →</button>' : '') + '</div>';
+}
+function statusLine(n){
+  if (n.v2) return n.st.short + (n.mark ? '; ' + MARK[n.mark].label.toLowerCase() : '');
+  if (n.st.key === 'adjacent-field') return n.bridge === 'bridge-needed' ? 'Another field holds it; bridge needed' : 'Another field holds it';
+  return n.st.short + (n.bridge === 'bridge-needed' ? '; bridge needed' : '');
+}
+function orgList(recs){
+  return '<ul class="orgs">' + recs.map(e => {
+    const o = e.org, site = safeUrl(o.url);
+    return '<li class="org"><div class="org-top"><button class="org-name" type="button" data-nav="org:' + esc(o.org_id) + '">' + esc(o.name) + '</button>' +
+      (site ? '<a class="org-site" href="' + esc(site) + '" target="_blank" rel="noopener">Website</a>' : '') + '</div>' +
+      '<p class="org-meta">' + esc(orgMeta(o)) + '</p>' + orgOpen(o) +
+      (e.note || e.url ? '<details><summary>Why it’s listed</summary><p>' + esc(e.note) + (e.url ? ' <a href="' + esc(e.url) + '" target="_blank" rel="noopener">Source</a>' : '') + '</p></details>' : '') +
+      '</li>';
+  }).join('') + '</ul>';
+}
+function nodePanel(n){
+  let h = '<h2>' + esc(n.name) + '</h2>';
+  h += '<p class="pn-status">' + miniHex({cls:n.st.cls}, 10) + '<span><b>' + esc(n.v2 ? n.st.short : n.st.label) + '.</b> ' + esc(n.capNote || n.st.plain) + '</span></p>';
+  if (n.v2 && n.home.length){
+    h += '<p class="pn-home">' + (n.mark ? tokenIcon(n.mark, 10) : '<span class="pn-home-sp"></span>') + '<span><b>Who holds it:</b> ' + esc(n.mark === 'labs' ? 'frontier labs only' : n.home.map(k => k === 'another-field' && n.owner ? n.owner : HOME[k]).join(', ')) + '.' + (n.mark === 'labs' ? ' ' + esc(MARK.labs.plain) : '') + '</span></p>';
+  }
+  if (n.v2 && n.connection){
+    const c = CONNECTION[n.connection];
+    h += '<p class="pn-bridge pn-conn-' + n.connection + '"><b>' + esc(c.label) + '.</b> ' + esc(n.connNote || c.plain) + '</p>';
+  }
+  if (n.bridge){
+    const owner = n.owner ? ' Held by ' + n.owner + '.' : '';
+    h += '<p class="pn-bridge"><b>' + esc(BRIDGE[n.bridge].label) + '.</b> ' + esc(BRIDGE[n.bridge].plain + owner) + '</p>';
+  }
+  if (n.definition) h += '<p class="pn-def">' + esc(n.definition) + '</p>';
+  const total = n.main.length + n.side.length;
+  h += '<h3>Who works on it <span class="n">' + plural(total, 'organisation') + '</span></h3>';
+  if (!total) h += '<p class="pn-empty">No organisation is recorded here yet.</p>';
+  else {
+    h += n.main.length ? '<h4>Main line of work (' + n.main.length + ')</h4>' + orgList(n.main) : '<p class="pn-empty">No organisation has this as a main line of work.</p>';
+    if (n.side.length) h += '<h4>Side line (' + n.side.length + ')</h4>' + orgList(n.side);
+  }
+  const rel = Array.from(n.related).map(s => M.nodes.get(s)).filter(Boolean).sort((a, b) => (a.layer.index - b.layer.index) || a.name.localeCompare(b.name));
+  if (rel.length){
+    h += '<h3>Linked problems <span class="n">' + rel.length + ', drawn on the map</span></h3>';
+    const by = new Map(); rel.forEach(m => { if (!by.has(m.layer)) by.set(m.layer, []); by.get(m.layer).push(m); });
+    by.forEach((list, layer) => {
+      h += '<h4>' + (layer === n.layer ? 'Also in ' : 'In ') + esc(layer.name) + '</h4><ul class="rows">' +
+        list.map(m => '<li><button type="button" data-nav="node:' + esc(m.slug) + '">' + miniHex(specOf(m), 8) + '<span class="rw"><span class="t">' + esc(m.name) + '</span><small>' + esc(m.sub.name) + '</small></span><span></span></button></li>').join('') + '</ul>';
+    });
+  }
+  h += '<button class="pn-more" type="button" data-nav="area:' + esc(n.sub.slug) + '"><span>All ' + plural(n.sub.nodes.length, 'problem') + ' in ' + esc(n.sub.name) + '</span><span aria-hidden="true">→</span></button>';
+  return h;
+}
+function orgPanel(o){
+  const site = safeUrl(o.url), main = o.edges.filter(e => e.main).length;
+  let h = '<h2>' + esc(o.name) + '</h2><p class="org-meta" style="font-size:14px">' + esc(orgMeta(o)) + '</p>' + orgOpen(o);
+  if (site) h += '<p class="pn-def"><a href="' + esc(site) + '" target="_blank" rel="noopener">' + esc(site.replace(/^https?:\/\//, '').replace(/\/$/, '')) + '</a></p>';
+  if (o.notes && o.status !== 'active') h += '<p class="pn-def">' + esc(o.notes) + '</p>';
+  const layersOn = new Set(o.edges.map(e => e.node.layer));
+  h += '<h3>Works on <span class="n">' + plural(o.edges.length, 'problem') + ', ' + main + ' as a main line, across ' + plural(layersOn.size, 'layer') + '</span></h3>';
+  const by = new Map();
+  o.edges.slice().sort((a, b) => (a.node.layer.index - b.node.layer.index) || (b.main - a.main) || a.node.name.localeCompare(b.node.name))
+    .forEach(e => { if (!by.has(e.node.layer)) by.set(e.node.layer, []); by.get(e.node.layer).push(e); });
+  by.forEach((list, layer) => {
+    h += '<h4>' + esc(layer.name) + '</h4><ul class="rows">' + list.map(e =>
+      '<li><button type="button" data-nav="node:' + esc(e.node.slug) + '">' + miniHex(specOf(e.node), 8) + '<span class="rw"><span class="t">' + esc(e.node.name) + '</span><small>' + esc(e.node.sub.name) + '</small></span><span class="rn">' + (e.main ? 'Main' : 'Side') + '</span></button></li>').join('') + '</ul>';
+  });
+  return h;
+}
+function onNavClick(e){
+  const more = e.target.closest('[data-more]');
+  if (more){
+    const which = more.dataset.more, list = which === 'area' ? orgsIn(M.subs.get(state.slug).nodes) : orgsIn(layerNodes(M.layerBy.get(state.slug)));
+    const ul = more.previousElementSibling, tmp = document.createElement('div');
+    tmp.innerHTML = orgRows(list, list.length, which); ul.replaceWith(tmp.firstChild); more.remove();
+    return true;
+  }
+  const b = e.target.closest('[data-nav]'); if (!b) return false;
+  const v = b.dataset.nav, i = v.indexOf(':');
+  navigate(i < 0 ? v : v.slice(0, i), i < 0 ? null : v.slice(i + 1));
+  return true;
+}
+panel.addEventListener('click', onNavClick);
+
+/* ------------------------------------------------------------ tooltip */
+function showTip(slug, x, y, rect){
+  const n = M.nodes.get(slug); if (!n) return;
+  const who = n.main.concat(n.side).map(e => e.org.name);
+  const whoLine = who.length ? who.slice(0, 3).join(', ') + (who.length > 3 ? ' and ' + (who.length - 3) + ' more' : '') : 'No organisation recorded yet';
+  tip.innerHTML = '<p class="t-where">' + esc(n.sub.name) + ', ' + esc(n.layer.name) + '</p><p class="t-name">' + esc(n.name) + '</p>' +
+    '<p class="t-row">' + miniHex(specOf(n), 7) + '<span>' + esc(statusLine(n)) + '</span></p>' +
+    '<p class="t-who">' + esc(whoLine) + '</p>';
+  tip.hidden = false;
+  const tw = tip.offsetWidth, th = tip.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  let left, top;
+  if (rect){ left = rect.left + rect.width / 2 - tw / 2; top = rect.top - th - 10; if (top < 8) top = rect.bottom + 10; }
+  else { left = x + 16; top = y + 18; if (left + tw > vw - 8) left = x - tw - 14; if (top + th > vh - 8) top = y - th - 14; }
+  tip.style.transform = 'translate(' + Math.round(clamp(left, 8, vw - tw - 8)) + 'px,' + Math.round(clamp(top, 8, vh - th - 8)) + 'px)';
+}
+function hideTip(){ tip.hidden = true; }
+
+/* ------------------------------------------------------------ map events */
+svg.addEventListener('pointerover', e => {
+  const h = e.target.closest('.hex'); if (!h || e.pointerType === 'touch') return;
+  state.hover = h.dataset.slug;
+  if (!(state.level === 'node' && state.slug === state.hover)) showTip(state.hover, e.clientX, e.clientY); else hideTip();
+  drawRings(); if (state.links) drawSelLinks();
+});
+svg.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || tip.hidden) return;
+  const h = e.target.closest('.hex'); if (h) showTip(h.dataset.slug, e.clientX, e.clientY);
+});
+svg.addEventListener('pointerout', e => {
+  const h = e.target.closest('.hex'); if (!h) return;
+  if (e.relatedTarget && h.contains(e.relatedTarget)) return;
+  state.hover = null; hideTip(); drawRings(); if (state.links) drawSelLinks();
+});
+svg.addEventListener('click', e => {
+  hideTip();
+  const h = e.target.closest('.hex');
+  if (h){ setRoving(h.dataset.slug); navigate('node', h.dataset.slug); return; }
+  const lab = e.target.closest('.isl-label'); if (lab){ navigate('area', lab.dataset.sub); return; }
+  const t = e.target.closest('.layer-title'); if (t){ navigate('layer', t.dataset.layer); return; }
+  if (state.filter){ state.filter = null; syncKey(); paint(); drawAllLinks(); return; }
+  if (state.level !== 'overview') goUp();
+});
+function setRoving(slug){
+  if (!slug || !cellPos.has(slug)) return;
+  const prev = kbdSlug && cellPos.get(kbdSlug);
+  if (prev && prev.el) prev.el.setAttribute('tabindex', '-1');
+  kbdSlug = slug;
+  const p = cellPos.get(slug); if (p.el) p.el.setAttribute('tabindex', '0');
+}
+svg.addEventListener('focusin', e => {
+  const h = e.target.closest('.hex'); if (!h) return;
+  setRoving(h.dataset.slug);
+  if (h.matches(':focus-visible')){ state.focus = h.dataset.slug; $('#kbd-hint').hidden = false; showTip(h.dataset.slug, 0, 0, h.getBoundingClientRect()); drawRings(); }
+});
+svg.addEventListener('focusout', () => { hideTip(); state.focus = null; $('#kbd-hint').hidden = true; drawRings(); });
+svg.addEventListener('keydown', e => {
+  const h = e.target.closest('.hex'); if (!h) return;
+  const dirs = {ArrowRight:[1,0], ArrowLeft:[-1,0], ArrowDown:[0,1], ArrowUp:[0,-1]};
+  if (dirs[e.key]){ e.preventDefault(); const nx = neighbourIn(h.dataset.slug, dirs[e.key]); if (nx){ setRoving(nx); cellPos.get(nx).el.focus(); } }
+  else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); navigate('node', h.dataset.slug); }
+});
+function neighbourIn(slug, v){
+  const a = cellPos.get(slug); let best = null, bs = Infinity;
+  cellPos.forEach((b, s) => {
+    if (s === slug) return;
+    const dx = b.x - a.x, dy = b.y - a.y, along = dx * v[0] + dy * v[1];
+    if (along <= 1) return;
+    const across = Math.abs(dx * v[1] - dy * v[0]);
+    if (across > along * 1.8) return;
+    const sc = along + across * 2.2;
+    if (sc < bs){ bs = sc; best = s; }
+  });
+  return best;
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || e.target === $('#find')) return;
+  if (state.filter){ state.filter = null; syncKey(); paint(); drawAllLinks(); return; }
+  if (state.level !== 'overview'){
+    const inPanel = e.target.closest && e.target.closest('.panel');
+    goUp();
+    if (inPanel && !panel.hidden){ const b = panel.querySelector('.pn-close'); if (b) b.focus(); }
+    else if (inPanel && kbdSlug){ const p = cellPos.get(kbdSlug); if (p && p.el) p.el.focus({preventScroll:true}); }
+  }
+});
+$('#home-btn').addEventListener('click', () => navigate('overview'));
+$('#links-btn').addEventListener('click', () => {
+  state.links = !state.links;
+  $('#links-btn').setAttribute('aria-pressed', state.links ? 'true' : 'false');
+  drawAllLinks();
+});
+
+/* ------------------------------------------------------------ census key: every problem as one small hex */
+function buildCensus(){
+  const byStatus = k => Array.from(M.nodes.values()).filter(n => n.st.key === k);
+  const row = (label, sub, list, f) => {
+    const hexes = list.map(n => miniHex(specOf(n), 6.2)).join('');
+    return '<li><button class="crow" type="button" data-ft="' + f.type + '" data-fk="' + esc(f.key) + '" aria-pressed="false" title="Show only these on the map">' +
+      '<span class="cl">' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' +
+      '<span class="run">' + hexes + '<span class="cn">' + list.length + '</span></span></button></li>';
+  };
+  const st = k => STATUS_BY[k];
+  const adj = byStatus('adjacent-field');
+  const bridgeAll = Array.from(M.nodes.values()).filter(n => n.bridge === 'bridge-needed').sort((a, b) => orderOf(b) - orderOf(a));
+  const extra = M.bridgeElsewhere;
+  if (M.v2){
+    const byCap = k => Array.from(M.nodes.values()).filter(n => n.st.key === k);
+    const byMark = k => Array.from(M.nodes.values()).filter(n => n.mark === k).sort((a, b) => a.st.rank - b.st.rank);
+    $('#census').classList.add('v2');
+    $('#census').innerHTML =
+      '<div class="cg busy"><h2>How much work there is</h2><ul>' +
+        row('Nobody yet', 'None', byCap('none'), {type:'cap', key:'none'}) +
+        row('A little', 'Thin', byCap('thin'), {type:'cap', key:'thin'}) +
+        row('Active', '', byCap('active'), {type:'cap', key:'active'}) +
+        row('Busy', '', byCap('busy'), {type:'cap', key:'busy'}) +
+        (byCap('unknown').length ? row('Not assessed', '', byCap('unknown'), {type:'cap', key:'unknown'}) : '') + '</ul></div>' +
+      '<div class="cg other"><h2>Who holds it</h2><ul>' +
+        row('Only frontier labs', 'Pink ring', byMark('labs'), {type:'mark', key:'labs'}) +
+        row('Another field', 'Blue dot', byMark('field'), {type:'mark', key:'field'}) + '</ul>' +
+        '<p class="foot">Every other problem has independent groups, government, companies or universities on it. The panel says which.</p></div>';
+  } else
+  $('#census').innerHTML =
+    '<div class="cg busy"><h2>Organisations working on it</h2><ul>' +
+      row('One or two', st('nascent').label, byStatus('nascent'), {type:'status', key:'nascent'}) +
+      row('Several', st('covered').label, byStatus('covered'), {type:'status', key:'covered'}) +
+      row('Many', st('crowded').label, byStatus('crowded'), {type:'status', key:'crowded'}) +
+      (byStatus('unknown').length ? row('Not assessed', '', byStatus('unknown'), {type:'status', key:'unknown'}) : '') + '</ul></div>' +
+    '<div class="cg gap"><h2>Nobody independent yet</h2><ul>' +
+      row('Nobody at all', st('unowned').label, byStatus('unowned'), {type:'status', key:'unowned'}) +
+      row('Only inside labs', st('lab-internal').label, byStatus('lab-internal'), {type:'status', key:'lab-internal'}) + '</ul></div>' +
+    '<div class="cg other"><h2>Held by another field</h2><ul>' +
+      row('They cover it', 'Join them', adj.filter(n => n.bridge !== 'bridge-needed'), {type:'adjcover', key:'1'}) +
+      row('Bridge needed', 'Build the link', bridgeAll, {type:'bridge', key:'bridge-needed'}) + '</ul>' +
+      (extra.length ? '<p class="foot">The pink edge also marks ' + extra.map(n => n.name).join(', ') + ' (' + extra.map(n => n.st.label.toLowerCase()).join(', ') + ').</p>' : '') + '</div>';
+  $('#census').querySelectorAll('.crow').forEach(b => b.addEventListener('click', () => {
+    const f = {type:b.dataset.ft, key:b.dataset.fk};
+    const same = state.filter && state.filter.type === f.type && state.filter.key === f.key;
+    if (state.level !== 'overview') navigate('overview');
+    state.filter = same ? null : f;
+    syncKey(); paint(); drawAllLinks();
+  }));
+}
+function buildLenses(){
+  const bar = $('#lensbar');
+  bar.hidden = !M.lenses.length;
+  $('#lb-chips').innerHTML = M.lenses.map(l => '<button class="lbtn" type="button" data-lens="' + esc(l.slug) + '" aria-pressed="false">' + esc(l.name) + '<span class="n">' + l.count + '</span></button>').join('');
+}
+$('#lb-chips').addEventListener('click', e => {
+  const b = e.target.closest('.lbtn'); if (!b) return;
+  const f = {type:'lens', key:b.dataset.lens};
+  const same = state.filter && state.filter.type === 'lens' && state.filter.key === f.key;
+  if (state.level !== 'overview') navigate('overview');
+  state.filter = same ? null : f;
+  syncKey(); paint(); drawAllLinks();
+});
+function syncKey(){
+  document.querySelectorAll('.lbtn').forEach(b => b.setAttribute('aria-pressed', state.filter && state.filter.type === 'lens' && state.filter.key === b.dataset.lens ? 'true' : 'false'));
+  const lens = state.filter && state.filter.type === 'lens' ? M.lenses.find(l => l.slug === state.filter.key) : null;
+  $('#lb-def').hidden = !lens || !lens.definition; if (lens) $('#lb-def').textContent = lens.definition;
+  document.querySelectorAll('.crow').forEach(b => {
+    const on = !!state.filter && state.filter.type === b.dataset.ft && state.filter.key === b.dataset.fk;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+function buildLayers(){
+  $('#layers').innerHTML = M.layers.map(l => '<button class="lchip" type="button" data-nav="layer:' + esc(l.slug) + '" data-layer="' + esc(l.slug) + '" aria-pressed="false">' + esc(l.name) + '<span class="n">' + layerNodes(l).length + '</span></button>').join('');
+}
+function syncLayers(){
+  let cur = null;
+  if (state.level === 'layer') cur = state.slug;
+  else if (state.level === 'area') cur = M.subs.get(state.slug).layer.slug;
+  else if (state.level === 'node') cur = M.nodes.get(state.slug).layer.slug;
+  document.querySelectorAll('.lchip').forEach(b => b.setAttribute('aria-pressed', b.dataset.layer === cur ? 'true' : 'false'));
+}
+$('#layers').addEventListener('click', onNavClick);
+
+/* ------------------------------------------------------------ search */
+const findIn = $('#find'), findList = $('#find-list');
+let findItems = [], findActive = -1;
+function runFind(){
+  const q = findIn.value.trim().toLowerCase();
+  if (!q){ closeFind(); return; }
+  const hits = [];
+  const score = name => { const s = name.toLowerCase(), i = s.indexOf(q); return i < 0 ? -1 : (i === 0 ? 0 : (s[i - 1] === ' ' ? 1 : 2)); };
+  M.nodes.forEach(n => { const sc = score(n.name); if (sc >= 0) hits.push({lv:'node', slug:n.slug, name:n.name, ty:n.sub.name, spec:specOf(n), sc}); });
+  M.subs.forEach(s => { const sc = score(s.name); if (sc >= 0) hits.push({lv:'area', slug:s.slug, name:s.name, ty:'Sub-area of ' + s.layer.name, sc:sc - 0.5}); });
+  M.orgs.forEach(o => { const sc = score(o.name); if (sc >= 0) hits.push({lv:'org', slug:o.org_id, name:o.name, ty:'Organisation · ' + plural(o.edges.length, 'problem'), sc:sc + 0.2}); });
+  hits.sort((a, b) => (a.sc - b.sc) || a.name.localeCompare(b.name));
+  findItems = hits.slice(0, 10); findActive = findItems.length ? 0 : -1;
+  findList.innerHTML = findItems.length ? findItems.map((h, i) =>
+    '<li role="option" id="fo-' + i + '" data-i="' + i + '" aria-selected="' + (i === findActive) + '">' +
+    (h.spec ? miniHex(h.spec, 7) : '<span></span>') + '<span>' + esc(h.name) + '<span class="ty">' + esc(h.ty) + '</span></span></li>').join('')
+    : '<li class="none">Nothing matches that.</li>';
+  findList.hidden = false; findIn.setAttribute('aria-expanded', 'true');
+  findIn.setAttribute('aria-activedescendant', findActive >= 0 ? 'fo-' + findActive : '');
+}
+function closeFind(){ findList.hidden = true; findIn.setAttribute('aria-expanded', 'false'); findItems = []; findActive = -1; }
+function chooseFind(i){
+  const h = findItems[i]; if (!h) return;
+  closeFind(); findIn.value = ''; findIn.blur();
+  navigate(h.lv, h.slug);
+  if (h.lv === 'node') setRoving(h.slug);
+  const close = panel.querySelector('.pn-close'); if (close) close.focus({preventScroll:true});
+}
+findIn.addEventListener('input', runFind);
+findIn.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    if (!findItems.length) return;
+    e.preventDefault();
+    findActive = (findActive + (e.key === 'ArrowDown' ? 1 : -1) + findItems.length) % findItems.length;
+    findList.querySelectorAll('li').forEach((li, i) => li.setAttribute('aria-selected', i === findActive ? 'true' : 'false'));
+    findIn.setAttribute('aria-activedescendant', 'fo-' + findActive);
+  } else if (e.key === 'Enter'){ e.preventDefault(); chooseFind(findActive); }
+  else if (e.key === 'Escape'){
+    if (!findList.hidden) closeFind(); else if (findIn.value) findIn.value = ''; else { findIn.blur(); if (state.level !== 'overview') goUp(); }
+  }
+});
+findList.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li){ e.preventDefault(); chooseFind(+li.dataset.i); } });
+findIn.addEventListener('blur', () => setTimeout(closeFind, 120));
+
+/* ------------------------------------------------------------ text */
+function buildText(){
+  const d = M.data, total = M.nodes.size;
+  let date = d.generated || '';
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (dm) date = +dm[3] + ' ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][+dm[2] - 1] + ' ' + dm[1];
+  if (M.v2 && $('.lede')) $('.lede').textContent = 'Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.';
+  const meta = $('#meta'), foot = $('#chart-foot'), idx = $('#index-cols');
+  if (meta) meta.textContent = [plural(total, 'problem'), plural(M.orgs.size, 'organisation'), 'data v' + (d.version || '?') + (date ? ', ' + date : '')].join(' · ');
+  if (foot) foot.innerHTML = '<span>Click a hex to see who works on it. Click an island’s name to open the whole sub-area.</span><span><b>' + M.links.length + '</b> links between problems, <b>' + M.tagCount + '</b> organisation tags, each with a source</span>';
+  if (idx) idx.innerHTML = M.layers.map(l => '<section><h3>' + esc(l.name) + '</h3>' + l.subareas.map(s =>
+    '<h4><span>' + esc(s.name) + '</span><span class="ref">' + (s.ref || '') + '</span></h4><ul>' + s.nodes.map(n =>
+      '<li><button type="button" data-nav="node:' + esc(n.slug) + '">' + miniHex(specOf(n), 7) + '<span>' + esc(n.name) + ' <span class="vh">' + esc(statusLine(n)) + '</span></span><span class="ct" title="Organisations recorded">' + (n.main.length + n.side.length) + '</span></button></li>').join('') + '</ul>').join('') + '</section>').join('');
+}
+if ($('#index-cols')) $('#index-cols').addEventListener('click', e => { if (onNavClick(e) && LAY && LAY.mode === 'wide') chart.scrollIntoView({block:'start', behavior: reduceMotion() ? 'auto' : 'smooth'}); });
+
+/* ------------------------------------------------------------ theme */
+const THEMES = ['auto', 'light', 'dark'];
+function applyTheme(t){
+  const root = document.documentElement;
+  if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+  const lbl = t === 'auto' ? 'Auto' : t === 'light' ? 'Light' : 'Dark';
+  const b = $('#theme-btn'); if (!b) return;
+  b.textContent = lbl;
+  b.setAttribute('aria-label', 'Colour scheme: ' + lbl + '. Click to change.');
+  b.title = 'Colour scheme: ' + lbl;
+}
+let theme = 'auto';
+try { theme = localStorage.getItem('fieldmap-theme') || 'auto'; } catch (e){}
+if (THEMES.indexOf(theme) < 0) theme = 'auto';
+if (theme !== 'auto' || !document.documentElement.hasAttribute('data-theme')) applyTheme(theme);
+if ($('#theme-btn')) $('#theme-btn').addEventListener('click', () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % 3];
+  applyTheme(theme);
+  try { localStorage.setItem('fieldmap-theme', theme); } catch (e){}
+});
+
+/* ------------------------------------------------------------ boot */
+/* The reference page embeds two <script type="application/json"> blocks
+   (#field-map-data, #field-map-orgs) here and parses them at boot. The
+   module has no embedded data: the host calls FieldMap.setData(json, orgs)
+   instead (docs/design/07-integration-and-checks.md, "The component
+   contract"). ORGS_BLOCK stays null so setData's own `orgs || ORGS_BLOCK`
+   fallback is unchanged when the host passes its own orgs argument. */
+let ORGS_BLOCK = null;
+function setData(json, orgs){
+  M = buildModel(json, orgs || ORGS_BLOCK);
+  state.filter = null;
+  const ok = state.level === 'overview' || (state.level === 'node' ? M.nodes.has(state.slug) : state.level === 'area' ? M.subs.has(state.slug) : state.level === 'org' ? M.orgs.has(state.slug) : M.layerBy.has(state.slug));
+  if (!ok){ state.level = 'overview'; state.slug = null; }
+  buildCensus(); buildLayers(); buildLenses();
+  render();
+  buildText();
+  renderPanel(); paint(); syncLayers(); moveCamera(true);
+}
+setData({layers:[]});
+if (OPTS.hash){ const [lv, s] = readHash(); if (lv !== 'overview'){ navigate(lv, s, {fromHash:true, instant:true, noScroll:true}); if (LAY && LAY.mode === 'wide' && state.level !== 'overview') requestAnimationFrame(() => { const t = chart.getBoundingClientRect().top; if (t > 24){ savedScroll = 0; window.scrollBy(0, t - 8); } }); } }
+
+let rt = 0, lastW = 0;
+new ResizeObserver(() => {
+  const w = Math.floor(wrap.clientWidth);
+  if (w === lastW) return; lastW = w;
+  clearTimeout(rt); rt = setTimeout(() => { render(); buildText(); renderPanel(); moveCamera(true); }, 60);
+}).observe(wrap);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { render(); buildText(); });
+if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { render(); buildText(); });
+
+window.FieldMap = {
+  open: (level, slug) => navigate(level, slug),
+  select: slug => navigate(slug ? 'node' : 'overview', slug),
+  clear: () => navigate('overview'),
+  setData,
+  relayout: render
+};
+})();

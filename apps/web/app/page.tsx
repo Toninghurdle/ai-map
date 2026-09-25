@@ -1,10 +1,8 @@
 import { getMapData, getMapStats, getOrgCountsByNode } from "@/lib/data";
 import { plural, formatLongDate } from "@/lib/text";
+import { LEDE } from "@/lib/lede";
 import { CapacityHex } from "@/components/CapacityHex";
 import { ThemeToggle } from "@/components/ThemeToggle";
-
-const LEDE =
-  "Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.";
 
 export default async function HomePage() {
   const data = await getMapData();
