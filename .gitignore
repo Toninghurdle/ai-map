@@ -31,3 +31,8 @@ test-results/
 apps/web/public/fieldmap.*.js
 apps/web/public/fieldmap.*.css
 apps/web/fieldmap-manifest.json
+
+# design QA output: screenshots, pixel diffs and the report the design-qa
+# agent writes. A full pass is ~30 folders of PNG pairs, regenerated from the
+# running site whenever it runs, so it isn't worth versioning.
+qa/
