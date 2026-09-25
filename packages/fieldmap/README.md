@@ -37,8 +37,9 @@ the script expects) and `apps/web/components/FieldMapMount.tsx` once,
 shared by `/` (the whole map) and `/map/[level]/[slug]` so the map isn't
 unmounted and remounted (and refetched) when the reader moves between
 levels. The two routes share this one layout because they sit in the same
-route group, `app/(map)/`; a plain `/map` now redirects permanently to `/`
-(`apps/web/app/map/page.tsx`).
+route group, `app/(map)/`; a plain `/map` now redirects temporarily (307)
+to `/` (`apps/web/app/map/page.tsx`, whose docstring explains why it is not
+a permanent 308 while the URL shape is still settling).
 `apps/web/scripts/copy-fieldmap.mjs` (run by `predev` and `prebuild`)
 copies `src/fieldmap.js` and `src/fieldmap.css` into `apps/web/public`
 with a content-hashed filename, recorded in `apps/web/fieldmap-manifest.json`,
@@ -47,8 +48,12 @@ gets a new URL rather than serving a browser's cached script.
 
 `FieldMapMount`:
 
-1. Sets `window.FIELD_MAP_OPTIONS = { hash: false, panel: false, reserveRight: 430 }`
-   before the script runs, so the site owns routing and its own panel.
+1. Sets `window.FIELD_MAP_OPTIONS = { hash: false, panel: true }` before the
+   script runs, so the site owns routing and the module draws its own panel.
+   `panel: true` is an interim (F1 in `docs/design/design-qa-fixes.md`): until
+   task 3 builds the site's own panel, the module's built-in one is what a
+   reader gets, and the camera centres what's lit. Task 3 switches this to
+   `{ hash: false, panel: false, reserveRight: 430 }`.
 2. Loads the copied script once (a `<script>` tag), which sets
    `window.FieldMap`.
 3. Calls `FieldMap.setData(mapJson)` with the data fetched from
@@ -66,6 +71,7 @@ gets a new URL rather than serving a browser's cached script.
    doesn't fill history with one entry per hex). Calls
    `FieldMap.open(level, slug)` on the way back in when the site's own
    links or the browser's back and forward buttons change the route.
-6. Renders the site's own side panel (`05-panels-and-pages.md`) from
-   server data alongside the mounted map, not the map's built-in one; this
-   is task 3, not yet built.
+6. Task 3 only, not yet built: renders the site's own side panel
+   (`05-panels-and-pages.md`) from server data alongside the mounted map,
+   in place of the map's built-in one. Until then step 1's `panel: true`
+   means the built-in panel is the one on screen.
