@@ -123,6 +123,9 @@ h1 span{display:block;font-weight:400}
 .run svg{display:block;width:13px;height:14px;overflow:visible;margin-right:1px}
 .run .hx-fill{stroke:var(--ink);stroke-width:.7;stroke-opacity:.55}
 .run .cn{font-size:14px;font-weight:600;margin-left:8px;font-variant-numeric:tabular-nums;line-height:14px}
+/* shown in place of the run of mini tiles when a key row counts nothing, so the
+   empty space reads as deliberate (06-v2-encoding.md, "The key for v2") */
+.run .cnone{font-size:12px;color:var(--ink-3);line-height:14px}
 .cg .foot{margin:6px 0 0;font-size:12.5px;color:var(--ink-3)}
 
 /* ---------------- toolbar ---------------- */
@@ -216,6 +219,11 @@ h1 span{display:block;font-weight:400}
 .has-focus .layer-title:not(.is-on){opacity:.45}
 svg.zoomed .labels,svg.zoomed .titles{display:none}
 .islands .hex,.isl-label,.layer-title{transition:opacity .2s ease}
+/* an island name or layer title a problem's name tag had to overlap, hidden for as
+   long as that problem is open (04-interaction.md, "Placing name tags"). .sl is the
+   screen-space copy of an island name, shown instead of .isl-label past zoom 1.3. */
+.isl-label.name-hidden,.layer-title.name-hidden,.sl.name-hidden{opacity:0!important;pointer-events:none}
+.sl{transition:opacity .2s ease}
 .rings path{fill:none;stroke:var(--link);pointer-events:none;vector-effect:non-scaling-stroke}
 .ring-sel{stroke-width:3.2}
 .ring-rel{stroke-width:1.6}
@@ -480,7 +488,7 @@ const CONNECTION = {
   missing:{label:'No connection yet', plain:'Almost nothing flows between that field and AI developers yet. Building the link is the work.'}
 };
 const markOf = home => { const h = Array.isArray(home) ? home : []; if (h.indexOf('another-field') >= 0) return 'field'; if (h.length === 1 && h[0] === 'frontier-labs') return 'labs'; return null; };
-const UNKNOWN = {key:'unknown', cls:'unk', group:'other', label:'Not yet assessed', short:'Not assessed', plain:'Coverage has not been assessed yet.', rank:9};
+const UNKNOWN = {key:'unknown', cls:'unk', group:'other', label:'Not assessed', short:'Not assessed', plain:'Coverage has not been assessed yet.', rank:9};
 const BRIDGE = {
   'adjacent-covers-it': {label:'They cover it', plain:'The neighbouring community is already working on the AI-specific version. The move is to join or work with them.'},
   'bridge-needed': {label:'Bridge needed', plain:'The neighbouring community exists but isn’t treating the AI-specific version seriously. The move is to build a bridge, or found something.'}
@@ -535,6 +543,15 @@ function wrapText(text, font, maxW){
 
 /* --------------------------------------------------------------- model */
 let M = null;
+/* A lens with no name of its own is shown as a readable form of its slug:
+   hyphens to spaces, first letter capitalised, so "loss-of-control" reads
+   "Loss of control" rather than as internal jargon (06-v2-encoding.md,
+   Lenses). Used for the button, its accessible name and anywhere else the
+   lens is named. */
+function lensName(slug){
+  const s = String(slug).replace(/-/g, ' ').trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 function buildModel(data, orgData){
   const layers = [], nodes = new Map(), subs = new Map(), layerBy = new Map();
   (data && data.layers || []).forEach((L, li) => {
@@ -598,8 +615,8 @@ function buildModel(data, orgData){
   let v2 = false; nodes.forEach(n => { if (n.v2) v2 = true; });
   /* lenses: optional cross-cutting tags, off by default; only lenses that tag at least one problem are offered */
   const ld = data && data.lens_definitions, lensList = [];
-  if (Array.isArray(ld)) ld.forEach(l => { if (l && l.slug) lensList.push({slug:String(l.slug), name:l.name || l.slug, definition:l.definition || ''}); });
-  else if (ld && typeof ld === 'object') Object.keys(ld).forEach(k => { const v = ld[k]; lensList.push({slug:k, name:(v && v.name) || k, definition:typeof v === 'string' ? v : ((v && v.definition) || '')}); });
+  if (Array.isArray(ld)) ld.forEach(l => { if (l && l.slug) lensList.push({slug:String(l.slug), name:l.name || lensName(l.slug), definition:l.definition || ''}); });
+  else if (ld && typeof ld === 'object') Object.keys(ld).forEach(k => { const v = ld[k]; lensList.push({slug:k, name:(v && v.name) || lensName(k), definition:typeof v === 'string' ? v : ((v && v.definition) || '')}); });
   const lenses = lensList.filter(l => { let c = 0; nodes.forEach(n => { if (n.lenses.indexOf(l.slug) >= 0) c++; }); l.count = c; return c > 0; });
   return {data, layers, nodes, subs, layerBy, links, counts, adjBridge, adjCovers, bridgeElsewhere, orgs, tagCount, v2, lenses};
 }
@@ -1106,19 +1123,33 @@ function drawScreen(){
     });
   }
   if (cam.k > 1.3) s += screenLabels();
-  if (state.level === 'node' || state.level === 'org') s += tags();
+  if (state.level === 'node' || state.level === 'org') s += tags(); else hideNames([]);
   SCREEN.innerHTML = s;
+  applyHiddenScreenNames();
 }
+/* The screen-space copies of the island names, drawn instead of the world-space
+   .isl-label once the camera is past 1.3 (see drawScreen). Each one's box is kept
+   in screenNames so tags() can test against it: both sets of labels are built into
+   the same innerHTML string and are not in the DOM yet when tags() runs, so these
+   boxes are computed the same way the text is placed rather than measured. */
+let screenNames = [];
 function screenLabels(){
   const on = focusSet(), fs = LAY.fs, x1 = LAY.W - panelWidth();
+  const font = '500 ' + fs + 'px ' + FONT;
   let out = '';
+  screenNames = [];
   islands.forEach(is => {
     let lo = -Infinity; is.cells.forEach(c => { lo = Math.max(lo, c.y); });
     const [sx, sy] = toScreen((is.label.box.x0 + is.label.box.x1) / 2, lo + LAY.R);
     if (sx < -60 || sx > x1 + 60 || sy < -20 || sy > LAY.H + 20) return;
     const lit = is.cells.some(c => on.has(c.node.slug));
-    const lines = wrapText(is.sub.name, '500 ' + fs + 'px ' + FONT, 150);
-    out += '<text class="sl ' + (lit ? 'on' : 'dim') + '" font-size="' + fs + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(sy + 6 + fs * 0.9 + j * fs * 1.18) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
+    const lines = wrapText(is.sub.name, font, 150);
+    /* text-anchor is middle, so each line is centred on sx; the box is the widest
+       line, from the first line's cap height to the last line's baseline */
+    const w = lines.reduce((m, ln) => Math.max(m, measure(ln, font)), 0);
+    const top = sy + 6, bottom = sy + 6 + fs * 0.9 + (lines.length - 1) * fs * 1.18 + fs * 0.25;
+    screenNames.push({slug:is.sub.slug, x0:sx - w / 2, y0:top, x1:sx + w / 2, y1:bottom});
+    out += '<text class="sl ' + (lit ? 'on' : 'dim') + '" data-sub="' + esc(is.sub.slug) + '" font-size="' + fs + '">' + lines.map((ln, j) => '<tspan x="' + f1(sx) + '" y="' + f1(sy + 6 + fs * 0.9 + j * fs * 1.18) + '">' + esc(ln) + '</tspan>').join('') + '</text>';
   });
   return out;
 }
@@ -1129,30 +1160,83 @@ function tags(){
   else list = M.orgs.get(state.slug).edges.map(e => e.node);
   const R = LAY.R, r = R * cam.k, x1 = LAY.W - panelWidth() - 4, placed = [], hexes = [];
   list.forEach(m => { const p = cellPos.get(m.slug); if (p){ const [hx, hy] = toScreen(p.x, p.y); hexes.push({x0:hx - r * 0.85, y0:hy - r * 0.95, x1:hx + r * 0.85, y1:hy + r * 0.95}); } });
-  const names = islands.map(is => is.label.box).concat(LAY.titles.map(t => t.box).filter(Boolean)).map(bx => { const a = toScreen(bx.x0, bx.y0), z = toScreen(bx.x1, bx.y1); return {x0:a[0], y0:a[1], x1:z[0], y1:z[1]}; });
+  /* Island names and layer titles, each keeping the slug it belongs to, so a tag that
+     has to overlap one can hide that one name rather than every name (see hideNames).
+     Measured from what is actually on screen, not from is.label.box: that box is the
+     slot the packing algorithm reserved, and the text inside it is centred and can be
+     wider or narrower, so the reserved box is not where the words are. */
+  const svgBox = svg.getBoundingClientRect();
+  const nameBox = el => { const b = el.getBoundingClientRect(); return {x0:b.left - svgBox.left, y0:b.top - svgBox.top, x1:b.right - svgBox.left, y1:b.bottom - svgBox.top}; };
+  const names = [];
+  svg.querySelectorAll('.isl-label').forEach(el => { if (el.dataset.sub) names.push(Object.assign({kind:'sub', slug:el.dataset.sub}, nameBox(el))); });
+  svg.querySelectorAll('.layer-title .layer-name').forEach(el => { const g = el.closest('.layer-title'); if (g && g.dataset.layer) names.push(Object.assign({kind:'layer', slug:g.dataset.layer}, nameBox(el))); });
+  /* Past zoom 1.3 the island name on screen is the .sl copy, not the world-space
+     .isl-label (which svg.zoomed hides), so test against those boxes too or a tag
+     will overprint the very label the reader is looking at. */
+  if (cam.k > 1.3) screenNames.forEach(o => names.push({kind:'screen', slug:o.slug, x0:o.x0, y0:o.y0, x1:o.x1, y1:o.y1}));
+  const over = [];
   let out = '';
   list.forEach((m, i) => {
     const p = cellPos.get(m.slug); if (!p) return;
     const [sx, sy] = toScreen(p.x, p.y), sel = state.level === 'node' && i === 0;
     const fsz = sel ? 14 : 13, font = (sel ? '700 ' : '500 ') + fsz + 'px ' + FONT;
-    const w = measure(m.name, font) + 6, h = fsz + 6, gap = 5;
-    const cands = [[sx + r * 0.9 + gap, sy - h / 2], [sx - r * 0.9 - gap - w, sy - h / 2], [sx - w / 2, sy + r + 2], [sx - w / 2, sy - r - 2 - h],
-                   [sx + r * 0.6, sy - r - h], [sx + r * 0.6, sy + r], [sx - r * 0.6 - w, sy - r - h], [sx - r * 0.6 - w, sy + r]];
-    let at = null;
-    for (let pass = 0; pass < (sel ? 3 : state.level === 'org' ? 1 : 2) && !at; pass++){
+    const w = measure(m.name, font) + 6, h = fsz + 6;
+    /* pass 0 tries the eight positions at a 5px gap; pass 1 tries the same eight
+       further out, at 18px, before any overlap is allowed (04-interaction.md,
+       "Placing name tags") */
+    const at18 = pass => pass === 1 ? 18 : 5;
+    let at = null, hitNames = [];
+    for (let pass = 0; pass < (sel ? 4 : state.level === 'org' ? 1 : 3) && !at; pass++){
+      const gap = at18(pass);
+      const cands = [[sx + r * 0.9 + gap, sy - h / 2], [sx - r * 0.9 - gap - w, sy - h / 2], [sx - w / 2, sy + r + gap - 3], [sx - w / 2, sy - r - gap + 3 - h],
+                     [sx + r * 0.6, sy - r - h - (gap - 5)], [sx + r * 0.6, sy + r + (gap - 5)], [sx - r * 0.6 - w, sy - r - h - (gap - 5)], [sx - r * 0.6 - w, sy + r + (gap - 5)]];
       for (const [x, y] of cands){
         const b = {x0:x, y0:y, x1:x + w, y1:y + h};
         if (b.x0 < 4 || b.x1 > x1 || b.y0 < 4 || b.y1 > LAY.H - 4) continue;
-        if (pass < 2 && (placed.some(o => hit(o, b, 2)) || hexes.some(o => hit(o, b, 1)))) continue;
-        if (pass < 1 && names.some(o => hit(o, b, 1))) continue;
-        at = b; break;
+        if (pass < 3 && (placed.some(o => hit(o, b, 2)) || hexes.some(o => hit(o, b, 1)))) continue;
+        const clash = names.filter(o => hit(o, b, 1));
+        if (pass < 2 && clash.length) continue;
+        at = b; hitNames = clash; break;
       }
     }
     if (!at) return;
     placed.push(at);
+    /* the tag won, so the names it covers go: the reader asked for the tag */
+    hitNames.forEach(o => { if (!over.some(q => q.kind === o.kind && q.slug === o.slug)) over.push({kind:o.kind, slug:o.slug}); });
     out += '<text class="tag' + (sel ? ' sel' : '') + '" x="' + f1(at.x0 + 3) + '" y="' + f1(at.y0 + h - 5) + '">' + esc(m.name) + '</text>';
   });
+  hideNames(over);
   return out;
+}
+/* Hides the island names and layer titles a name tag had to overlap, for as long as
+   the problem or organisation is open, and restores them when it closes or the tags
+   move (04-interaction.md, "Placing name tags"). The 0.2s fade is the .isl-label and
+   .layer-title opacity transition already in fieldmap.css. */
+let hiddenNames = [];
+function hideNames(list){
+  list = list || [];
+  const key = o => o.kind + ':' + o.slug;
+  const want = new Set(list.map(key));
+  hiddenNames.forEach(o => { if (!want.has(key(o))) nameEl(o) && nameEl(o).classList.remove('name-hidden'); });
+  list.forEach(o => { const el = nameEl(o); if (el) el.classList.add('name-hidden'); });
+  hiddenNames = list;
+}
+/* The world-space labels are in the DOM and keep their class across frames. The
+   screen-space .sl copies are rebuilt from scratch on every draw, after tags() has
+   returned, so they are marked in applyHiddenScreenNames once SCREEN.innerHTML is
+   set rather than here. */
+function nameEl(o){
+  if (o.kind === 'screen') return null;
+  return o.kind === 'sub'
+    ? svg.querySelector('.isl-label[data-sub="' + CSS.escape(o.slug) + '"]')
+    : svg.querySelector('.layer-title[data-layer="' + CSS.escape(o.slug) + '"]');
+}
+function applyHiddenScreenNames(){
+  if (!SCREEN) return;
+  const want = new Set(hiddenNames.filter(o => o.kind === 'screen').map(o => o.slug));
+  SCREEN.querySelectorAll('.sl').forEach(el => {
+    el.classList.toggle('name-hidden', want.has(el.dataset.sub));
+  });
 }
 
 /* ------------------------------------------------------------ navigation */
@@ -1477,9 +1561,13 @@ function buildCensus(){
   const byStatus = k => Array.from(M.nodes.values()).filter(n => n.st.key === k);
   const row = (label, sub, list, f) => {
     const hexes = list.map(n => miniHex(specOf(n), 6.2)).join('');
+    /* An empty run would read as a rendering fault, so say so in words: the row
+       itself stays, because "nobody yet, none right now" is a fact worth
+       stating (06-v2-encoding.md, "The key for v2"). */
+    const none = list.length ? '' : '<span class="cnone">none right now</span>';
     return '<li><button class="crow" type="button" data-ft="' + f.type + '" data-fk="' + esc(f.key) + '" aria-pressed="false" title="Show only these on the map">' +
       '<span class="cl">' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span>' +
-      '<span class="run">' + hexes + '<span class="cn">' + list.length + '</span></span></button></li>';
+      '<span class="run">' + hexes + none + '<span class="cn">' + list.length + '</span></span></button></li>';
   };
   const st = k => STATUS_BY[k];
   const adj = byStatus('adjacent-field');
@@ -1601,12 +1689,24 @@ findList.addEventListener('mousedown', e => { const li = e.target.closest('li[da
 findIn.addEventListener('blur', () => setTimeout(closeFind, 120));
 
 /* ------------------------------------------------------------ text */
+/* The lede, built from the data rather than fixed, so it only promises pink when
+   some problem is at capacity none (06-v2-encoding.md, "The key for v2"). */
+function ledeText(){
+  const anyNone = Array.from(M.nodes.values()).some(n => n.st.key === 'none');
+  return anyNone
+    ? 'Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.'
+    : 'Every hex is a problem someone could work on. Gold means a little work, green active and dark forest busy, and right now every problem has someone on it. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.';
+}
 function buildText(){
   const d = M.data, total = M.nodes.size;
   let date = d.generated || '';
   const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (dm) date = +dm[3] + ' ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][+dm[2] - 1] + ' ' + dm[1];
-  if (M.v2 && $('.lede')) $('.lede').textContent = 'Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field.';
+  /* The lede describes what is actually on the map: with no problem at
+     capacity none there is no pink tile, and promising one sends a newcomer
+     looking for something that is not there (06-v2-encoding.md, "The key for
+     v2"). */
+  if (M.v2 && $('.lede')) $('.lede').textContent = ledeText();
   const meta = $('#meta'), foot = $('#chart-foot'), idx = $('#index-cols');
   if (meta) meta.textContent = [plural(total, 'problem'), plural(M.orgs.size, 'organisation'), 'data v' + (d.version || '?') + (date ? ', ' + date : '')].join(' · ');
   if (foot) foot.innerHTML = '<span>Click a hex to see who works on it. Click an island’s name to open the whole sub-area.</span><span><b>' + M.links.length + '</b> links between problems, <b>' + M.tagCount + '</b> organisation tags, each with a source</span>';

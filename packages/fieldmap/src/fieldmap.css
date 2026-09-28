@@ -1,86 +1,79 @@
-<title>AI Safety and Security Field Map</title>
-<meta name="description" content="A chart of the AI safety and security field: every problem, how many organisations work on it, and who they are.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap">
-<style>
 /* ---------------------------------------------------------------
-   A field map drawn like a game board, in the CATAN New Energies palette.
-     sea        cyan, paler in the shallows next to land
-     tiles      cream-framed hexes coloured by how much work there is:
-                gold a little (thin), green active, forest busy, pink nobody yet
-     tokens     v2 data: a pink ring for frontier labs only, a blue dot for another field
-     v1.2 data  hatching for lab-internal, periwinkle stipple for adjacent field,
-                a pink dashed edge for bridge needed
-   Palette checked for colour blindness, all pairs: light worst dE 13.0,
-   dark 11.4. Every status also has a pattern, token or edge.
-   One typeface, Jost (a Futura revival). Design notes: field-map-design/.
+   AI Safety and Security Field Map: component styles.
+
+   Ported from docs/design/reference/src/head.html into packages/fieldmap
+   (docs/plan/mvp.md task 1). The reference page defines its own colour
+   tokens (--page, --ink, --sea, ...) at :root. The site instead loads
+   docs/design/tokens.css globally (the --fm-* names, see
+   docs/design/02-tokens.md), so this file only aliases the reference
+   script's variable names to the --fm-* tokens rather than keeping a
+   second set of values: the script (and a couple of inline `style=`
+   attributes it writes into the SVG it draws) still reads --page, --ink,
+   --frame and so on, unchanged, so aliasing here means the script's
+   internals don't have to be touched to pick up the design tokens.
+
+   The standalone build (docs/design/reference/src/build.py) is separate
+   from this file and unaffected by this port: it embeds a data file into
+   docs/design/reference/src/head.html and body.html as they stand, with
+   their own unaliased --page, --ink, --sea, ... tokens. It doesn't read
+   this file.
 ---------------------------------------------------------------- */
 :root{
   color-scheme: light;
-  --page:#f5f8fa;
-  --paper:#ffffff;
-  --ink:#16181a;
-  --ink-2:#44484d;
-  --ink-3:#686e74;
-  --rule:rgba(22,24,26,.16);
-  --rule-2:rgba(22,24,26,.5);
-  --sea:#4cb8e5;        /* open sea */
-  --shelf:#79caee;      /* one hex out */
-  --shoal:#a8dcf3;      /* shallows next to land */
-  --contour:rgba(255,255,255,.75);
-  --frame:#fbf6dc;      /* cream tile frame */
-  --frame-edge:#e3d8ad;
-  --coast:#e3d8ad;
-  --link:#16181a;
-  --focus:#0a5bd3;
-  --dim:.25;
+  --page: var(--fm-page);
+  --paper: var(--fm-paper);
+  --ink: var(--fm-ink);
+  --ink-2: var(--fm-ink-2);
+  --ink-3: var(--fm-ink-3);
+  --rule: var(--fm-rule);
+  --rule-2: var(--fm-rule-2);
+  --sea: var(--fm-sea);
+  --shelf: var(--fm-shelf);
+  --shoal: var(--fm-shoal);
+  --contour: var(--fm-contour);
+  --frame: var(--fm-frame);
+  --frame-edge: var(--fm-frame-edge);
+  --coast: var(--fm-frame-edge); /* unused alias of --frame-edge, per docs/design/02-tokens.md */
+  --link: var(--fm-link);
+  --focus: var(--fm-focus);
+  --dim: var(--fm-dim);
 
-  --l-nas:#f7d65a;      /* one or two: wheat gold */
-  --l-cov:#8cb52a;      /* several: pasture green */
-  --l-cro:#2f6a22;      /* many: forest */
-  --m-un:#c8358a;       /* nobody: pink */
+  --l-nas: var(--fm-cap-thin);
+  --l-cov: var(--fm-cap-active);
+  --l-cro: var(--fm-cap-busy);
+  --m-un: var(--fm-cap-none);
+  --o-adj: var(--fm-home-field);
+  --o-dot: var(--fm-home-field-edge);
+  --s-unk: var(--fm-cap-unknown);
+
+  --tx-nas: var(--fm-on-cap-thin);
+  --tx-cov: var(--fm-on-cap-active);
+  --tx-cro: var(--fm-on-cap-busy);
+  --tx-un: var(--fm-on-cap-none);
+  --tx-unk: var(--fm-on-cap-unknown);
+
+  /* v1.2 only: lab-internal hatching and the bridge-needed edge. Not used
+     with v2 data (docs/design/02-tokens.md), so there is no --fm- token
+     for them; kept as literals so the legacy path still renders if a v1.2
+     file is ever loaded. */
   --m-lab:#fbe1ee;
   --m-lab-line:#c8358a;
-  --o-adj:#a3b0f4;      /* another field: periwinkle */
-  --o-dot:#5d67b8;
   --bridge:#c8358a;
-  --s-unk:#d4d4d0;
+  --tx-lab:#16181a; --tx-adj:#16181a;
 
-  --tx-nas:#16181a; --tx-cov:#16181a; --tx-cro:#ffffff; --tx-un:#ffffff;
-  --tx-lab:#16181a; --tx-adj:#16181a; --tx-unk:#16181a;
-
-  --font:"Jost", "Futura", "Century Gothic", "Avenir Next", system-ui, sans-serif;
+  --font: var(--fm-font);
+}
+:root[data-theme="dark"]{
+  --m-lab:#f3d3e3;
+  --m-lab-line:#c83a86;
+  --bridge:#e0559f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    color-scheme: dark;
-    --page:#08131b; --paper:#0d1b25;
-    --ink:#e9ebed; --ink-2:#b2b7bc; --ink-3:#848b92;
-    --rule:rgba(233,235,237,.14); --rule-2:rgba(233,235,237,.5);
-    --sea:#0c2d42; --shelf:#10394f; --shoal:#164a66; --contour:rgba(255,255,255,.16);
-    --frame:#c9c09a; --frame-edge:#8f8766; --coast:#8f8766;
-    --link:#f2f4f6; --focus:#6aa8ff; --dim:.28;
-    --l-nas:#e6c552; --l-cov:#7fa82a; --l-cro:#2f6a22;
-    --m-un:#e0559f; --m-lab:#f3d3e3; --m-lab-line:#c83a86;
-    --o-adj:#98a5ec; --o-dot:#525cae; --bridge:#e0559f; --s-unk:#3c4146;
-    --tx-nas:#16181a; --tx-cov:#16181a; --tx-cro:#ffffff; --tx-un:#16181a;
-    --tx-lab:#16181a; --tx-adj:#16181a; --tx-unk:#e9ebed;
+    --m-lab:#f3d3e3;
+    --m-lab-line:#c83a86;
+    --bridge:#e0559f;
   }
-}
-:root[data-theme="dark"]{
-  color-scheme: dark;
-  --page:#08131b; --paper:#0d1b25;
-  --ink:#e9ebed; --ink-2:#b2b7bc; --ink-3:#848b92;
-  --rule:rgba(233,235,237,.14); --rule-2:rgba(233,235,237,.5);
-  --sea:#0c2d42; --shelf:#10394f; --shoal:#164a66; --contour:rgba(255,255,255,.16);
-  --frame:#c9c09a; --frame-edge:#8f8766; --coast:#8f8766;
-  --link:#f2f4f6; --focus:#6aa8ff; --dim:.28;
-  --l-nas:#e6c552; --l-cov:#7fa82a; --l-cro:#2f6a22;
-  --m-un:#e0559f; --m-lab:#f3d3e3; --m-lab-line:#c83a86;
-  --o-adj:#98a5ec; --o-dot:#525cae; --bridge:#e0559f; --s-unk:#3c4146;
-  --tx-nas:#16181a; --tx-cov:#16181a; --tx-cro:#ffffff; --tx-un:#16181a;
-  --tx-lab:#16181a; --tx-adj:#16181a; --tx-unk:#e9ebed;
 }
 
 /* ---------------- page ---------------- */
@@ -358,4 +351,3 @@ body.map-stack.has-panel .page{padding-bottom:60vh}
 }
 @media (forced-colors:active){ .hex .hx-fill{stroke:CanvasText;stroke-width:1} }
 @media print{ .theme,.panel,.tip,.bar{display:none!important} body{background:#fff} }
-</style>

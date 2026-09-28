@@ -16,6 +16,8 @@ Colours are the `--fm-cap-*` tokens. The words describe activity, never progress
 
 If the v2 data ends up with very few `none` problems, pink will be scarce on the map. Don't compensate by recolouring anything else pink. The labs-only token carries the "no independent work" story, and the key still leads with the "Nobody yet" row.
 
+If no problem is at `none` at all, as on the data compiled in September 2026, nothing on the map is pink. The lede then must not promise it (see "The key for v2" below), and the "Nobody yet" row shows "0" followed by "none right now" in 12px `--fm-ink-3`, so an empty run of mini tiles reads as deliberate rather than as a rendering fault. Keep the row: "nobody yet, none right now" is a fact worth stating.
+
 ## Home: a small token, and only when it changes what an entrant should do
 
 `home` can hold any mix of six values. Marking all of them on the map would bring back the clutter the owner wants to avoid, so the tile carries a token in exactly two cases:
@@ -65,13 +67,18 @@ Two groups instead of three (screens `b01`, `b11`):
 
 Grid columns: `minmax(0, 2.2fr) minmax(0, 1fr)`. Every row filters the map, as before. If any problem's capacity is missing or unrecognised, a "Not assessed" row is added after Busy, so the key always adds up to the number of tiles.
 
-The lede changes to match: "Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field."
+The lede changes to match, and is built from what is actually on the map. When some problem is at capacity `none`: "Every hex is a problem someone could work on. Pink means nobody is working on it yet, gold a little work, green active and dark forest busy. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field."
+
+When none is: "Every hex is a problem someone could work on. Gold means a little work, green active and dark forest busy, and right now every problem has someone on it. A small token says who holds it: a pink ring for frontier labs only, a blue dot for another field."
+
+The server-rendered lede and the script's own copy must pick the same sentence from the same data, or the text changes under the reader at hydration.
 
 ## Lenses
 
 `lenses` on each node plus `lens_definitions` at the top level (an array of `{slug, name, definition}` or an object keyed by slug; the reference reads both). Lenses are off by default.
 
 - A row under the toolbar, only shown when at least one lens tags at least one problem: the label "Lenses" (13px 600 ink-2), then one square button per lens in the `lens_definitions` order, with its problem count in lighter text ("Agents 3").
+- A lens with no `name` of its own is named by a readable form of its slug: hyphens to spaces, first letter capitalised, so `loss-of-control` reads "Loss of control". Never show a raw slug: it reads as internal jargon. The same text is used for the button, its accessible name and anywhere else the lens is named. A `name` in the data is used unchanged.
 - Buttons match the toolbar buttons but a size smaller: 13px 500, 1px `--fm-rule-2` border, 2px radius; pressed is ink fill with paper text.
 - Clicking a lens lights its problems on the whole map, exactly like a key filter, and shows the lens definition in one line under the row (13.5px ink-2). Only one lens or key filter is on at a time. Escape, clicking it again or clicking empty sea turns it off.
 - Screen `b08-lens.png`.

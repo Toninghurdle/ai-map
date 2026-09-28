@@ -8,7 +8,7 @@ Screens: `reference/screens/b01-overview-light.png`, `b02-overview-dark.png`, `b
 2. **The key** (see below). Three columns on wide screens (v1.2) or two (v2), stacking on narrow ones.
 3. **Toolbar.** Layer chips on the left (name plus problem count; the current layer is underlined 2px), then the search box, then square buttons: "Show all links" (a toggle) and "Whole map" (only when zoomed in). With v2 data that has lenses, a lens row sits under the toolbar (see `06-v2-encoding.md`).
 4. **The chart.** A neatline frame (2.5px ink) with grid references in its top and left margins, the map inside a 1px ink inner frame, and a one-line foot under the map: a usage hint on the left, totals on the right ("191 links between problems, 516 organisation tags, each with a source").
-5. **Every problem, as a list.** A closed `<details>` with "Show" and "Hide". Inside, one column per layer: layer name (uppercase, letter-spaced), each sub-area with its grid reference, and each problem with a mini tile and its organisation count. Every row opens that problem on the map. It's the list alternative to the map for screen-reader and keyboard users, so keep it complete. In the reference it's built by JavaScript; on the site, render it on the server so it also works without JavaScript and for crawlers (see `07-integration-and-checks.md`).
+5. **Every problem, as a list.** A closed `<details>` with "Show" and "Hide". Inside, one column per layer: layer name (uppercase, letter-spaced), each sub-area, and each problem with a mini tile and its organisation count. No grid references here: they are computed from the rendered map and only mean anything beside it at full width, so they stay in the sub-area and layer panels. Every row opens that problem on the map. It's the list alternative to the map for screen-reader and keyboard users, so keep it complete. In the reference it's built by JavaScript; on the site, render it on the server so it also works without JavaScript and for crawlers (see `07-integration-and-checks.md`).
 
 The panel lives inside the chart's map area on wide screens and becomes a bottom sheet on narrow ones. See `05-panels-and-pages.md`.
 
@@ -97,7 +97,7 @@ Then, outside the camera group, a screen-space overlay for text that must stay a
 
 ## Grid references
 
-Wide layout only. The map is divided into `clamp(round(W / 150), 4, 12)` columns lettered A, B, C and `clamp(round(H / 150), 3, 9)` rows numbered 1, 2, 3, with letters in the top margin and numbers in the left margin of the neatline (11px, 500, ink-2, with 5px tick marks at the boundaries). Each sub-area gets the reference of its centroid, for example "E3". The reference appears in the index, the sub-area panel ("Grid E3.") and the layer panel's sub-area list. Grid references fade out when the camera zooms in, because they no longer line up.
+Wide layout only. The map is divided into `clamp(round(W / 150), 4, 12)` columns lettered A, B, C and `clamp(round(H / 150), 3, 9)` rows numbered 1, 2, 3, with letters in the top margin and numbers in the left margin of the neatline (11px, 500, ink-2, with 5px tick marks at the boundaries). Each sub-area gets the reference of its centroid, for example "E3". The reference appears in the sub-area panel ("Grid E3.") and the layer panel's sub-area list, not in the server-rendered problem list. Grid references fade out when the camera zooms in, because they no longer line up.
 
 ## The key (the census)
 
