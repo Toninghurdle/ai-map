@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { ThemeScript } from "./theme-script";
+import { SiteFooter } from "@/components/SiteFooter";
 import { LEDE } from "@/lib/lede";
 import "./globals.css";
 
@@ -24,7 +26,14 @@ export default function RootLayout({
       <head>
         <ThemeScript />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Rendered once, here, so it appears on every route (the map, its
+            level pages, every detail page and /about) without each page
+            having to remember it (task brief item 6). */}
+        <SiteFooter />
+        <Analytics />
+      </body>
     </html>
   );
 }

@@ -1,3 +1,4 @@
+import { AboutBanner } from "@/components/AboutBanner";
 import { FieldMapMount } from "@/components/FieldMapMount";
 import { ProblemIndex } from "@/components/ProblemIndex";
 import { SkipToMap } from "@/components/SkipToMap";
@@ -154,6 +155,12 @@ export default async function MapLayout({ children }: { children: React.ReactNod
         <div className="lb-chips" id="lb-chips" role="group" aria-labelledby="lb-label" />
         <p className="lb-def" id="lb-def" hidden />
       </div>
+
+      {/* Above the map, "/" only (docs/about.md "Banner"; task 3 lite item
+          4). AboutBanner checks the route itself and renders nothing on a
+          level route, since this layout is shared with /map/[level]/[slug]
+          and has no server-side way to tell the two apart. */}
+      <AboutBanner />
 
       <section className="chart" id="chart" aria-label="Map of the field">
         <div className="grid-top" id="grid-top" aria-hidden="true" />

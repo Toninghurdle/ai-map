@@ -323,3 +323,616 @@ button {
   font-weight: 600;
   margin: 0 0 12px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Detail pages and the shared panel components (docs/design/05, task 3
+   lite). One reading column, same page chrome as the map
+   (docs/design/02-tokens.md "Page max width" / "Page side padding"), so a
+   problem, sub-area, layer or organisation reads as the panel with more
+   room. */
+
+.fm-detail {
+  /* Narrower than .fm-page's 1480px, so the auto margins it inherits have
+     to be restated here: without them the 720px column would be pinned to
+     the left of the 1480px page box and read as a misaligned stripe on a
+     wide screen, rather than as the centred reading column docs/design/05
+     ("Detail pages") asks for. */
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+/* Breadcrumb: docs/design/05, "Top row: breadcrumb and close". Detail pages
+   have nothing to close, so only the trail renders here; the close button
+   is the map panel's own. */
+.fm-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--fm-ink-2);
+  margin: 0 0 14px;
+}
+
+.fm-crumb a,
+.fm-crumb span.fm-crumb-current {
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-crumb a:hover {
+  color: var(--fm-ink);
+  text-decoration-color: currentColor;
+}
+
+.fm-crumb .fm-crumb-sep {
+  color: var(--fm-ink-3);
+}
+
+/* Panel title: docs/design/02-tokens.md "Panel title". */
+.fm-panel-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.fm-role-line-panel {
+  margin: -2px 0 8px;
+  font-style: italic;
+  color: var(--fm-ink-2);
+}
+
+.fm-status-line,
+.fm-home-line {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin: 4px 0 0;
+  font-size: 14.5px;
+}
+
+.fm-home-line {
+  font-size: 14px;
+  color: var(--fm-ink-2);
+  margin-top: 6px;
+}
+
+.fm-status-line svg,
+.fm-home-line svg,
+.fm-home-line .fm-home-sp {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  flex: none;
+}
+
+.fm-status-line b,
+.fm-home-line b {
+  font-weight: 600;
+  color: var(--fm-ink);
+}
+
+/* Connection box: docs/design/06-v2-encoding.md "Connection: panel only". */
+.fm-connection-box {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--fm-connection-border, var(--fm-home-field-edge));
+  font-size: 14px;
+  color: var(--fm-ink-2);
+  background: color-mix(in srgb, var(--fm-connection-border, var(--fm-home-field-edge)) 10%, transparent);
+}
+
+.fm-connection-box b {
+  color: var(--fm-ink);
+  font-weight: 600;
+}
+
+.fm-summary-line {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--fm-ink-2);
+}
+
+.fm-definition {
+  margin: 12px 0 0;
+  font-size: 14.5px;
+  color: var(--fm-ink-2);
+  line-height: 1.5;
+}
+
+/* Section heading: docs/design/05 "Section heading". */
+.fm-section-heading {
+  margin: 22px 0 4px;
+  padding-top: 10px;
+  border-top: 2px solid var(--fm-ink);
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.fm-section-heading .fm-count {
+  font-weight: 400;
+  color: var(--fm-ink-3);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.fm-subheading {
+  margin: 12px 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fm-ink-2);
+}
+
+.fm-empty-note {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--fm-ink-2);
+  font-style: italic;
+}
+
+/* Organisation card: docs/design/05 "Organisation card". */
+.fm-org-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fm-org-card {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--fm-rule);
+}
+
+.fm-org-card:last-child {
+  border-bottom: 0;
+}
+
+.fm-org-top {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.fm-org-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fm-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-org-name:hover {
+  text-decoration-color: currentColor;
+}
+
+.fm-org-site {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--fm-ink-3);
+  border-bottom: 1px solid var(--fm-rule-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fm-org-meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--fm-ink-3);
+}
+
+.fm-org-open {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fm-chip {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border: 1px solid var(--fm-rule-2);
+  border-radius: 2px;
+  color: var(--fm-ink-2);
+}
+
+.fm-chip-act-now {
+  border-color: var(--fm-ink);
+  color: var(--fm-ink);
+}
+
+.fm-org-evidence {
+  margin: 4px 0 0;
+}
+
+.fm-org-evidence summary {
+  font-size: 12.5px;
+  color: var(--fm-ink-3);
+  cursor: pointer;
+}
+
+.fm-org-evidence p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--fm-ink-2);
+}
+
+/* Rows: the workhorse list, docs/design/05 "Rows". */
+.fm-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fm-rows li {
+  border-bottom: 1px solid var(--fm-rule);
+}
+
+.fm-rows li:last-child {
+  border-bottom: 0;
+}
+
+.fm-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 2px;
+  font-size: 14.5px;
+  line-height: 1.3;
+  text-decoration: none;
+  color: inherit;
+}
+
+.fm-rows.fm-rows-plain .fm-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.fm-row-name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--fm-ink) 35%, transparent);
+}
+
+.fm-row:hover .fm-row-name {
+  text-decoration-color: var(--fm-ink);
+  text-decoration-thickness: 1.5px;
+}
+
+.fm-row-text {
+  min-width: 0;
+}
+
+.fm-row-sub {
+  display: block;
+  color: var(--fm-ink-3);
+  font-size: 12.5px;
+  margin-top: 1px;
+}
+
+/* Sub-area rows in a layer panel: one mini tile per problem, in island
+   order (docs/design/05 "Rows"). */
+.fm-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.fm-strip .fm-mini-hex {
+  width: 13px;
+  height: 13px;
+}
+
+.fm-row-value {
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.fm-show-all {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 0 0;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fm-show-all:hover {
+  color: var(--fm-ink);
+}
+
+summary.fm-show-all {
+  list-style: none;
+}
+
+summary.fm-show-all::-webkit-details-marker {
+  display: none;
+}
+
+/* Key agendas, canonical reference: a plain list of links, following
+   docs/design/05's own fallback ("prefer a row ... over inventing a card")
+   for the one list item the spec doesn't give its own component. */
+.fm-reference-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 14.5px;
+  color: var(--fm-ink-2);
+}
+
+.fm-reference-list li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--fm-rule);
+}
+
+.fm-reference-list li:last-child {
+  border-bottom: 0;
+}
+
+.fm-reference-list a {
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-reference-list a:hover {
+  color: var(--fm-ink);
+  text-decoration-color: currentColor;
+}
+
+/* "All n problems in X" button and previous/next: docs/design/05 "Buttons at the end". */
+.fm-more-btn {
+  appearance: none;
+  margin-top: 16px;
+  width: 100%;
+  border: 1px solid var(--fm-ink);
+  background: transparent;
+  border-radius: 2px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fm-more-btn:hover {
+  background: var(--fm-ink);
+  color: var(--fm-paper);
+}
+
+.fm-sib-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.fm-sib-nav a {
+  padding: 4px 0;
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+  max-width: 48%;
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-sib-nav a:last-child {
+  text-align: right;
+  margin-left: auto;
+}
+
+.fm-sib-nav a:hover {
+  color: var(--fm-ink);
+}
+
+/* Small "back to the map" link, on every detail page. */
+.fm-map-link {
+  display: inline-block;
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-map-link:hover {
+  color: var(--fm-ink);
+}
+
+/* Provenance box: docs/design/05 "Provenance box". Plain information, not a
+   warning, so no icon and no colour beyond the ink rules everything else
+   uses. */
+.fm-provenance {
+  margin: 28px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--fm-rule-2);
+  border-radius: 2px;
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+}
+
+/* Report link: docs/design/05, task brief items 4 and 5. A plain text
+   button so the address is only ever assembled at click time
+   (components/ReportLink.tsx). */
+.fm-report-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin-top: 12px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--fm-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fm-report-link:hover {
+  color: var(--fm-ink);
+}
+
+/* Inline variant: the About page's "email me at..." sentence
+   (app/about/page.tsx), sitting inside a paragraph rather than on its own
+   line. */
+.fm-inline-report-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.fm-inline-report-link:hover {
+  color: var(--fm-ink);
+  text-decoration-color: currentColor;
+}
+
+/* Site footer: on every page (task brief item 6). */
+.fm-footer {
+  max-width: 1480px;
+  margin: 48px auto 0;
+  padding: 18px clamp(16px, 3vw, 40px) 0;
+  border-top: 1px solid var(--fm-rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--fm-ink-3);
+}
+
+.fm-footer a {
+  color: var(--fm-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+}
+
+.fm-footer a:hover {
+  color: var(--fm-ink);
+}
+
+.fm-footer .fm-report-link {
+  margin-top: 0;
+  font-size: 13px;
+  color: var(--fm-ink-2);
+}
+
+/* About banner: task brief item 4, plain bordered note above the map on
+   "/" only (app/(map)/layout.tsx).
+
+   The page is prerendered with the banner present, because the server
+   cannot know whether this reader has closed it before. app/theme-script.tsx
+   stamps data-about-dismissed on <html> before first paint for a reader who
+   has, and the rule below keeps the banner out of that first paint: without
+   it the banner would paint and then disappear at hydration, which on a
+   phone pushes the map down and snaps it back up, the exact jump the task
+   brief's phone constraint rules out. After hydration
+   components/AboutBanner.tsx owns the visibility. */
+.fm-banner {
+  border: 1px solid var(--fm-ink);
+  border-radius: 2px;
+  padding: 12px 16px;
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--fm-ink-2);
+  background: var(--fm-paper);
+}
+
+[data-about-dismissed] .fm-banner {
+  display: none;
+}
+
+.fm-banner-actions {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.fm-banner-actions a {
+  color: var(--fm-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.fm-banner-actions button {
+  appearance: none;
+  border: 1px solid var(--fm-rule-2);
+  background: transparent;
+  border-radius: 2px;
+  padding: 4px 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fm-ink-2);
+  cursor: pointer;
+}
+
+.fm-banner-actions button:hover {
+  border-color: var(--fm-ink);
+  color: var(--fm-ink);
+}
+
+/* About page: single reading column, section headings reuse
+   .fm-section-heading. */
+.fm-about h1 {
+  margin: 0 0 18px;
+  font-size: clamp(26px, 3.6vw, 40px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.fm-about p {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fm-ink-2);
+  margin: 12px 0 0;
+}
+
+.fm-about .fm-section-heading {
+  margin-top: 32px;
+}
+
+.fm-about .fm-sign-off {
+  margin-top: 28px;
+  color: var(--fm-ink);
+  font-weight: 500;
+}

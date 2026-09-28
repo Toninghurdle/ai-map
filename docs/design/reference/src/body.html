@@ -996,9 +996,12 @@ function orgRows(list, limit, id){
   if (list.length > limit) h += '<button class="showall" type="button" data-more="' + id + '">Show all ' + list.length + '</button>';
   return h;
 }
+function pnHead(name, href){
+  return '<div class="pn-head"><h2>' + esc(name) + '</h2><a class="pn-full" href="' + esc(href) + '">Full page</a></div>';
+}
 function layerPanel(layer){
   const ns = layerNodes(layer), who = orgsIn(ns);
-  return '<h2>' + esc(layer.name) + '</h2><p class="pn-role">' + esc(layerRole(layer)) + '</p>' +
+  return pnHead(layer.name, '/layers/' + encodeURIComponent(layer.slug)) + '<p class="pn-role">' + esc(layerRole(layer)) + '</p>' +
     '<p class="pn-sum">' + esc(summary(ns)) + '</p>' +
     (layer.definition ? '<p class="pn-def">' + esc(layer.definition) + '</p>' : '') +
     '<h3>Sub-areas <span class="n">' + layer.subareas.length + '</span></h3><ul class="rows plain">' +
@@ -1007,7 +1010,7 @@ function layerPanel(layer){
 }
 function areaPanel(sub){
   const sibs = sub.layer.subareas, i = sibs.indexOf(sub), prev = sibs[i - 1], next = sibs[i + 1], who = orgsIn(sub.nodes);
-  return '<h2>' + esc(sub.name) + '</h2>' +
+  return pnHead(sub.name, '/areas/' + encodeURIComponent(sub.slug)) +
     '<p class="pn-sum">' + (sub.ref ? 'Grid ' + sub.ref + '. ' : '') + esc(summary(sub.nodes)) + '</p>' +
     (sub.definition ? '<p class="pn-def">' + esc(sub.definition) + '</p>' : '') +
     '<h3>Problems <span class="n">organisations on each</span></h3><ul class="rows">' +
@@ -1033,7 +1036,7 @@ function orgList(recs){
   }).join('') + '</ul>';
 }
 function nodePanel(n){
-  let h = '<h2>' + esc(n.name) + '</h2>';
+  let h = pnHead(n.name, '/problems/' + encodeURIComponent(n.slug));
   h += '<p class="pn-status">' + miniHex({cls:n.st.cls}, 10) + '<span><b>' + esc(n.v2 ? n.st.short : n.st.label) + '.</b> ' + esc(n.capNote || n.st.plain) + '</span></p>';
   if (n.v2 && n.home.length){
     h += '<p class="pn-home">' + (n.mark ? tokenIcon(n.mark, 10) : '<span class="pn-home-sp"></span>') + '<span><b>Who holds it:</b> ' + esc(n.mark === 'labs' ? 'frontier labs only' : n.home.map(k => k === 'another-field' && n.owner ? n.owner : HOME[k]).join(', ')) + '.' + (n.mark === 'labs' ? ' ' + esc(MARK.labs.plain) : '') + '</span></p>';
@@ -1068,7 +1071,7 @@ function nodePanel(n){
 }
 function orgPanel(o){
   const site = safeUrl(o.url), main = o.edges.filter(e => e.main).length;
-  let h = '<h2>' + esc(o.name) + '</h2><p class="org-meta" style="font-size:14px">' + esc(orgMeta(o)) + '</p>' + orgOpen(o);
+  let h = pnHead(o.name, '/orgs/' + encodeURIComponent(o.org_id)) + '<p class="org-meta" style="font-size:14px">' + esc(orgMeta(o)) + '</p>' + orgOpen(o);
   if (site) h += '<p class="pn-def"><a href="' + esc(site) + '" target="_blank" rel="noopener">' + esc(site.replace(/^https?:\/\//, '').replace(/\/$/, '')) + '</a></p>';
   if (o.notes && o.status !== 'active') h += '<p class="pn-def">' + esc(o.notes) + '</p>';
   const layersOn = new Set(o.edges.map(e => e.node.layer));
