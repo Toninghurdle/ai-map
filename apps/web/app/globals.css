@@ -108,6 +108,38 @@ button {
   color: var(--fm-paper);
 }
 
+/* The top-right controls: the About link beside the theme button
+   (components/HeaderControls.tsx). On the map they sit in the title row; on
+   a detail page, which has no title row, they align right on their own line
+   above the breadcrumb. Both stay on one line at phone width, which is why
+   the link is a plain underlined control rather than a second button. */
+.fm-header-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex: none;
+}
+
+.fm-detail .fm-header-controls {
+  margin-bottom: 14px;
+}
+
+.fm-about-link {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fm-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--fm-rule-2);
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.fm-about-link:hover {
+  color: var(--fm-ink);
+  text-decoration-color: currentColor;
+}
+
 /* Title block, shared by / and /map (docs/design/03-map.md "Page anatomy"). */
 .fm-title-row {
   display: flex;
@@ -820,17 +852,42 @@ summary.fm-show-all::-webkit-details-marker {
 }
 
 /* Site footer: on every page (task brief item 6). */
+/* Site footer. The 2px ink rule is the same weight that closes the title
+   block (.fm-rule), so the page opens and closes on the same line, and the
+   generous padding above and below keeps it from crowding the end of a long
+   reading column or sitting flush against the bottom of the window. */
 .fm-footer {
   max-width: 1480px;
-  margin: 48px auto 0;
-  padding: 18px clamp(16px, 3vw, 40px) 0;
-  border-top: 1px solid var(--fm-rule);
+  margin: 72px auto 0;
+  padding: 0 clamp(16px, 3vw, 40px) 56px;
+}
+
+/* The rule and the row sit on an inner element so the rule starts and ends
+   with the text, inside the page's side padding, rather than running the
+   full width of the page box. */
+.fm-footer-inner {
+  border-top: 2px solid var(--fm-ink);
+  padding-top: 24px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 20px;
+  gap: 10px 28px;
   align-items: baseline;
   font-size: 13px;
   color: var(--fm-ink-3);
+}
+
+/* On a detail page the reading column is 720px, so the footer matches it
+   and the closing rule starts and ends exactly under the text above it
+   rather than stretching across an empty page. Keyed off the page's own
+   main element, which the footer follows in the root layout, so no page has
+   to pass the footer a prop saying which shape it is.
+
+   .fm-detail is a 720px box whose text is then inset by .fm-page's side
+   padding, so the footer has to subtract that padding twice to land on the
+   same column: once for the inset on each side. */
+main.fm-detail ~ .fm-footer .fm-footer-inner {
+  max-width: calc(720px - clamp(16px, 3vw, 40px) * 2);
+  margin-inline: auto;
 }
 
 .fm-footer a {

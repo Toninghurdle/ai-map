@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { HeaderControls } from "@/components/HeaderControls";
 import { CapacityHex } from "@/components/CapacityHex";
 import { OrgRankRows } from "@/components/OrgRankRows";
 import { ProvenanceBox } from "@/components/ProvenanceBox";
@@ -65,6 +66,7 @@ export default async function AreaPage({
 
   return (
     <main className="fm-page fm-detail">
+      <HeaderControls />
       <Breadcrumb steps={[{ label: "Whole map", href: "/" }, { label: layer.name, href: `/layers/${layer.slug}` }]} />
       <Link href={`/map/area/${subarea.slug}`} className="fm-map-link">
         See this sub-area on the map

@@ -15,12 +15,17 @@ export async function SiteFooter() {
 
   return (
     <footer className="fm-footer">
-      <Link href="/about">About</Link>
-      <ReportLink subject="Footer" />
-      <span>Data licensed CC BY 4.0</span>
-      <span>
-        Data version {data.version}, {formatLongDate(data.generated)}
-      </span>
+      {/* The rule and the row live on an inner element so the rule lines up
+          with the text rather than running the full width of the page box
+          (globals.css, ".fm-footer-inner"). */}
+      <div className="fm-footer-inner">
+        <Link href="/about">About</Link>
+        <ReportLink subject="Footer" />
+        <span>Data licensed CC BY 4.0</span>
+        <span>
+          Data version {data.version}, {formatLongDate(data.generated)}
+        </span>
+      </div>
     </footer>
   );
 }

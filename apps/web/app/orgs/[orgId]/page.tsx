@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { HeaderControls } from "@/components/HeaderControls";
 import { CapacityHex } from "@/components/CapacityHex";
 import { ProvenanceBox } from "@/components/ProvenanceBox";
 import { ReportLink } from "@/components/ReportLink";
@@ -101,6 +102,7 @@ export default async function OrgPage({
 
   return (
     <main className="fm-page fm-detail">
+      <HeaderControls />
       <Breadcrumb steps={[{ label: "Whole map", href: "/" }]} />
       <Link href={`/map/org/${org.org_id}`} className="fm-map-link">
         See this organisation on the map

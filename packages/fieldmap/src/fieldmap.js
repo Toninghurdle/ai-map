@@ -405,7 +405,13 @@ function computeLayout(W){
 }
 
 /* ------------------------------------------------------------ render */
-const svg = $('#map'), wrap = $('#map-wrap'), panel = $('#panel'), tip = $('#tip'), chart = $('#chart');
+/* `let`, not `const`: a single-page host can unmount the map's markup and
+   mount fresh elements with the same ids (in Next.js, leaving the route
+   group that owns the chart and coming back to it). The script is a
+   singleton and only runs once, so FieldMap.remount() re-resolves these and
+   re-binds the listeners hung on them. See remount() at the foot of the
+   file. */
+let svg = $('#map'), wrap = $('#map-wrap'), panel = $('#panel'), tip = $('#tip'), chart = $('#chart');
 let LAY = null, WORLD = null, SCREEN = null;
 let cellPos = new Map(), islands = [], islandOfSub = new Map(), kbdSlug = null;
 const state = {level:'overview', slug:null, filter:null, links:false, hover:null, focus:null, from:null};
@@ -891,6 +897,33 @@ function crumbs(){
   }
   return out.map((c, i) => '<span class="step"><button type="button" data-nav="' + c[0] + (c[1] ? ':' + esc(c[1]) : '') + '">' + esc(c[2]) + '</button>' + (i < out.length - 1 ? '<span class="sep" aria-hidden="true">/</span>' : '') + '</span>').join('');
 }
+/* The owner's address, in the two forms the site also keeps apart
+   (apps/web/components/ReportLink.tsx): the readable one, which has no "@"
+   and so is safe to put in the markup, and the real one, assembled from
+   these parts only when the link is clicked. The joined address is never a
+   single literal here either. */
+const EMAIL_USER = 'dominic_deane', EMAIL_DOMAIN = ['yahoo', 'co', 'uk'].join('.');
+const EMAIL_DISPLAY = EMAIL_USER + ' at ' + EMAIL_DOMAIN;
+
+/* What is open, named for the email subject line. */
+function openName(){
+  if (state.level === 'layer'){ const l = M.layerBy.get(state.slug); return l ? l.name : ''; }
+  if (state.level === 'area'){ const s = M.subs.get(state.slug); return s ? s.name : ''; }
+  if (state.level === 'org'){ const o = M.orgs.get(state.slug); return o ? o.name : ''; }
+  const n = M.nodes.get(state.slug); return n ? n.name : '';
+}
+
+function contactLine(){
+  return '<p class="pn-contact"><button class="pn-report" type="button" data-report="1">Spotted something wrong? Email ' + esc(EMAIL_DISPLAY) + '</button></p>';
+}
+
+function onReportClick(e){
+  const b = e.target.closest('[data-report]'); if (!b) return false;
+  const subject = 'Field map: ' + openName();
+  window.location.href = 'mailto:' + EMAIL_USER + String.fromCharCode(64) + EMAIL_DOMAIN + '?subject=' + encodeURIComponent(subject);
+  return true;
+}
+
 function renderPanel(){
   const on = OPTS.panel && state.level !== 'overview';
   document.body.classList.toggle('has-panel', on);
@@ -901,6 +934,9 @@ function renderPanel(){
   else if (state.level === 'area') h += areaPanel(M.subs.get(state.slug));
   else if (state.level === 'org') h += orgPanel(M.orgs.get(state.slug));
   else h += nodePanel(M.nodes.get(state.slug));
+  /* At the foot of all four levels, so a reader who spots something wrong
+     can say so from where they spotted it. */
+  h += contactLine();
   panel.innerHTML = h;
   panel.hidden = false;
   panel.scrollTop = 0;
@@ -1026,6 +1062,7 @@ function orgPanel(o){
   return h;
 }
 function onNavClick(e){
+  if (onReportClick(e)) return true;
   const more = e.target.closest('[data-more]');
   if (more){
     const which = more.dataset.more, list = which === 'area' ? orgsIn(M.subs.get(state.slug).nodes) : orgsIn(layerNodes(M.layerBy.get(state.slug)));
@@ -1038,7 +1075,7 @@ function onNavClick(e){
   navigate(i < 0 ? v : v.slice(0, i), i < 0 ? null : v.slice(i + 1));
   return true;
 }
-panel.addEventListener('click', onNavClick);
+/* panel's click handler is attached in bindElements(). */
 
 /* ------------------------------------------------------------ tooltip */
 function showTip(slug, x, y, rect){
@@ -1058,22 +1095,22 @@ function showTip(slug, x, y, rect){
 function hideTip(){ tip.hidden = true; }
 
 /* ------------------------------------------------------------ map events */
-svg.addEventListener('pointerover', e => {
+function onSvgPointerOver(e){
   const h = e.target.closest('.hex'); if (!h || e.pointerType === 'touch') return;
   state.hover = h.dataset.slug;
   if (!(state.level === 'node' && state.slug === state.hover)) showTip(state.hover, e.clientX, e.clientY); else hideTip();
   drawRings(); if (state.links) drawSelLinks();
-});
-svg.addEventListener('pointermove', e => {
+}
+function onSvgPointerMove(e){
   if (e.pointerType !== 'mouse' || tip.hidden) return;
   const h = e.target.closest('.hex'); if (h) showTip(h.dataset.slug, e.clientX, e.clientY);
-});
-svg.addEventListener('pointerout', e => {
+}
+function onSvgPointerOut(e){
   const h = e.target.closest('.hex'); if (!h) return;
   if (e.relatedTarget && h.contains(e.relatedTarget)) return;
   state.hover = null; hideTip(); drawRings(); if (state.links) drawSelLinks();
-});
-svg.addEventListener('click', e => {
+}
+function onSvgClick(e){
   hideTip();
   const h = e.target.closest('.hex');
   if (h){ setRoving(h.dataset.slug); navigate('node', h.dataset.slug); return; }
@@ -1081,7 +1118,7 @@ svg.addEventListener('click', e => {
   const t = e.target.closest('.layer-title'); if (t){ navigate('layer', t.dataset.layer); return; }
   if (state.filter){ state.filter = null; syncKey(); paint(); drawAllLinks(); return; }
   if (state.level !== 'overview') goUp();
-});
+}
 function setRoving(slug){
   if (!slug || !cellPos.has(slug)) return;
   const prev = kbdSlug && cellPos.get(kbdSlug);
@@ -1089,18 +1126,18 @@ function setRoving(slug){
   kbdSlug = slug;
   const p = cellPos.get(slug); if (p.el) p.el.setAttribute('tabindex', '0');
 }
-svg.addEventListener('focusin', e => {
+function onSvgFocusIn(e){
   const h = e.target.closest('.hex'); if (!h) return;
   setRoving(h.dataset.slug);
   if (h.matches(':focus-visible')){ state.focus = h.dataset.slug; $('#kbd-hint').hidden = false; showTip(h.dataset.slug, 0, 0, h.getBoundingClientRect()); drawRings(); }
-});
-svg.addEventListener('focusout', () => { hideTip(); state.focus = null; $('#kbd-hint').hidden = true; drawRings(); });
-svg.addEventListener('keydown', e => {
+}
+function onSvgFocusOut(){ hideTip(); state.focus = null; $('#kbd-hint').hidden = true; drawRings(); }
+function onSvgKeyDown(e){
   const h = e.target.closest('.hex'); if (!h) return;
   const dirs = {ArrowRight:[1,0], ArrowLeft:[-1,0], ArrowDown:[0,1], ArrowUp:[0,-1]};
   if (dirs[e.key]){ e.preventDefault(); const nx = neighbourIn(h.dataset.slug, dirs[e.key]); if (nx){ setRoving(nx); cellPos.get(nx).el.focus(); } }
   else if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); navigate('node', h.dataset.slug); }
-});
+}
 function neighbourIn(slug, v){
   const a = cellPos.get(slug); let best = null, bs = Infinity;
   cellPos.forEach((b, s) => {
@@ -1124,12 +1161,12 @@ document.addEventListener('keydown', e => {
     else if (inPanel && kbdSlug){ const p = cellPos.get(kbdSlug); if (p && p.el) p.el.focus({preventScroll:true}); }
   }
 });
-$('#home-btn').addEventListener('click', () => navigate('overview'));
-$('#links-btn').addEventListener('click', () => {
+function onHomeClick(){ navigate('overview'); }
+function onLinksClick(){
   state.links = !state.links;
   $('#links-btn').setAttribute('aria-pressed', state.links ? 'true' : 'false');
   drawAllLinks();
-});
+}
 
 /* ------------------------------------------------------------ census key: every problem as one small hex */
 function buildCensus(){
@@ -1190,14 +1227,14 @@ function buildLenses(){
   bar.hidden = !M.lenses.length;
   $('#lb-chips').innerHTML = M.lenses.map(l => '<button class="lbtn" type="button" data-lens="' + esc(l.slug) + '" aria-pressed="false">' + esc(l.name) + '<span class="n">' + l.count + '</span></button>').join('');
 }
-$('#lb-chips').addEventListener('click', e => {
+function onLensClick(e){
   const b = e.target.closest('.lbtn'); if (!b) return;
   const f = {type:'lens', key:b.dataset.lens};
   const same = state.filter && state.filter.type === 'lens' && state.filter.key === f.key;
   if (state.level !== 'overview') navigate('overview');
   state.filter = same ? null : f;
   syncKey(); paint(); drawAllLinks();
-});
+}
 function syncKey(){
   document.querySelectorAll('.lbtn').forEach(b => b.setAttribute('aria-pressed', state.filter && state.filter.type === 'lens' && state.filter.key === b.dataset.lens ? 'true' : 'false'));
   const lens = state.filter && state.filter.type === 'lens' ? M.lenses.find(l => l.slug === state.filter.key) : null;
@@ -1217,10 +1254,10 @@ function syncLayers(){
   else if (state.level === 'node') cur = M.nodes.get(state.slug).layer.slug;
   document.querySelectorAll('.lchip').forEach(b => b.setAttribute('aria-pressed', b.dataset.layer === cur ? 'true' : 'false'));
 }
-$('#layers').addEventListener('click', onNavClick);
+/* #layers' click handler is attached in bindElements(). */
 
 /* ------------------------------------------------------------ search */
-const findIn = $('#find'), findList = $('#find-list');
+let findIn = $('#find'), findList = $('#find-list');
 let findItems = [], findActive = -1;
 function runFind(){
   const q = findIn.value.trim().toLowerCase();
@@ -1247,8 +1284,7 @@ function chooseFind(i){
   if (h.lv === 'node') setRoving(h.slug);
   const close = panel.querySelector('.pn-close'); if (close) close.focus({preventScroll:true});
 }
-findIn.addEventListener('input', runFind);
-findIn.addEventListener('keydown', e => {
+function onFindKeyDown(e){
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
     if (!findItems.length) return;
     e.preventDefault();
@@ -1259,9 +1295,9 @@ findIn.addEventListener('keydown', e => {
   else if (e.key === 'Escape'){
     if (!findList.hidden) closeFind(); else if (findIn.value) findIn.value = ''; else { findIn.blur(); if (state.level !== 'overview') goUp(); }
   }
-});
-findList.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li){ e.preventDefault(); chooseFind(+li.dataset.i); } });
-findIn.addEventListener('blur', () => setTimeout(closeFind, 120));
+}
+function onFindListMouseDown(e){ const li = e.target.closest('li[data-i]'); if (li){ e.preventDefault(); chooseFind(+li.dataset.i); } }
+function onFindBlur(){ setTimeout(closeFind, 120); }
 
 /* ------------------------------------------------------------ text */
 /* The lede, built from the data rather than fixed, so it only promises pink when
@@ -1289,7 +1325,7 @@ function buildText(){
     '<h4><span>' + esc(s.name) + '</span><span class="ref">' + (s.ref || '') + '</span></h4><ul>' + s.nodes.map(n =>
       '<li><button type="button" data-nav="node:' + esc(n.slug) + '">' + miniHex(specOf(n), 7) + '<span>' + esc(n.name) + ' <span class="vh">' + esc(statusLine(n)) + '</span></span><span class="ct" title="Organisations recorded">' + (n.main.length + n.side.length) + '</span></button></li>').join('') + '</ul>').join('') + '</section>').join('');
 }
-if ($('#index-cols')) $('#index-cols').addEventListener('click', e => { if (onNavClick(e) && LAY && LAY.mode === 'wide') chart.scrollIntoView({block:'start', behavior: reduceMotion() ? 'auto' : 'smooth'}); });
+function onIndexColsClick(e){ if (onNavClick(e) && LAY && LAY.mode === 'wide') chart.scrollIntoView({block:'start', behavior: reduceMotion() ? 'auto' : 'smooth'}); }
 
 /* ------------------------------------------------------------ theme */
 const THEMES = ['auto', 'light', 'dark'];
@@ -1306,11 +1342,11 @@ let theme = 'auto';
 try { theme = localStorage.getItem('fieldmap-theme') || 'auto'; } catch (e){}
 if (THEMES.indexOf(theme) < 0) theme = 'auto';
 if (theme !== 'auto' || !document.documentElement.hasAttribute('data-theme')) applyTheme(theme);
-if ($('#theme-btn')) $('#theme-btn').addEventListener('click', () => {
+function onThemeClick(){
   theme = THEMES[(THEMES.indexOf(theme) + 1) % 3];
   applyTheme(theme);
   try { localStorage.setItem('fieldmap-theme', theme); } catch (e){}
-});
+}
 
 /* ------------------------------------------------------------ boot */
 /* The reference page embeds two <script type="application/json"> blocks
@@ -1330,23 +1366,106 @@ function setData(json, orgs){
   buildText();
   renderPanel(); paint(); syncLayers(); moveCamera(true);
 }
-setData({layers:[]});
-if (OPTS.hash){ const [lv, s] = readHash(); if (lv !== 'overview'){ navigate(lv, s, {fromHash:true, instant:true, noScroll:true}); if (LAY && LAY.mode === 'wide' && state.level !== 'overview') requestAnimationFrame(() => { const t = chart.getBoundingClientRect().top; if (t > 24){ savedScroll = 0; window.scrollBy(0, t - 8); } }); } }
+/* ------------------------------------------------------------ element binding */
+/* Everything hung on an element that a host can replace lives here, so it
+   can be done again after a remount. The script is a singleton with
+   module-level state (docs/design/07-integration-and-checks.md, "Porting
+   notes"), so a single-page host that unmounts the chart and mounts it
+   again keeps the model, the camera and the current level, and only needs
+   the DOM re-attached. */
+let rt = 0, lastW = 0, sizeObserver = null;
 
-let rt = 0, lastW = 0;
-new ResizeObserver(() => {
+function onResize(){
   const w = Math.floor(wrap.clientWidth);
   if (w === lastW) return; lastW = w;
   clearTimeout(rt); rt = setTimeout(() => { render(); buildText(); renderPanel(); moveCamera(true); }, 60);
-}).observe(wrap);
+}
+
+function on(el, type, fn){ if (el) el.addEventListener(type, fn); }
+
+function bindElements(){
+  svg = $('#map'); wrap = $('#map-wrap'); panel = $('#panel'); tip = $('#tip'); chart = $('#chart');
+  findIn = $('#find'); findList = $('#find-list');
+
+  on(svg, 'pointerover', onSvgPointerOver);
+  on(svg, 'pointermove', onSvgPointerMove);
+  on(svg, 'pointerout', onSvgPointerOut);
+  on(svg, 'click', onSvgClick);
+  on(svg, 'focusin', onSvgFocusIn);
+  on(svg, 'focusout', onSvgFocusOut);
+  on(svg, 'keydown', onSvgKeyDown);
+
+  on(panel, 'click', onNavClick);
+  on($('#home-btn'), 'click', onHomeClick);
+  on($('#links-btn'), 'click', onLinksClick);
+  on($('#lb-chips'), 'click', onLensClick);
+  on($('#layers'), 'click', onNavClick);
+  on($('#index-cols'), 'click', onIndexColsClick);
+  on($('#theme-btn'), 'click', onThemeClick);
+
+  on(findIn, 'input', runFind);
+  on(findIn, 'keydown', onFindKeyDown);
+  on(findIn, 'blur', onFindBlur);
+  on(findList, 'mousedown', onFindListMouseDown);
+
+  /* A freshly mounted #links-btn carries the host's own markup, which says
+     aria-pressed="false", but state.links is module state that survives the
+     remount: nothing resets it, and unlike #home-btn (which navigate()
+     re-hides on every move) it has nothing that puts it right later. Left
+     alone, the reader comes back to lines drawn on the map and a button
+     claiming they are off, and the next press does the opposite of what it
+     says. */
+  const links = $('#links-btn');
+  if (links) links.setAttribute('aria-pressed', state.links ? 'true' : 'false');
+
+  // One observer at a time: the old one watches an element that is no
+  // longer in the document, so it would never fire again anyway, but
+  // leaving it attached keeps a detached node alive.
+  if (sizeObserver) sizeObserver.disconnect();
+  lastW = 0;
+  if (wrap && typeof ResizeObserver === 'function'){
+    sizeObserver = new ResizeObserver(onResize);
+    sizeObserver.observe(wrap);
+  }
+}
+
+bindElements();
+
+setData({layers:[]});
+if (OPTS.hash){ const [lv, s] = readHash(); if (lv !== 'overview'){ navigate(lv, s, {fromHash:true, instant:true, noScroll:true}); if (LAY && LAY.mode === 'wide' && state.level !== 'overview') requestAnimationFrame(() => { const t = chart.getBoundingClientRect().top; if (t > 24){ savedScroll = 0; window.scrollBy(0, t - 8); } }); } }
+
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { render(); buildText(); });
 if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { render(); buildText(); });
+
+/* Re-attach to freshly mounted markup and redraw. The host calls this when
+   its own elements have been replaced but the script is already loaded: in
+   a single-page app the module only ever runs once, so without it the
+   captured svg, wrap and panel still point at the nodes that were thrown
+   away and the new, empty ones are never drawn into. Safe to call when
+   nothing has changed; it rebinds and redraws the same elements. */
+function remount(){
+  bindElements();
+  /* The scroll position the map saved before scrolling itself into view
+     belongs to the page the reader has since left, so restoring it on the
+     way back up to the whole map would jump them somewhere arbitrary. */
+  savedScroll = null;
+  if (!M) return;
+  buildCensus(); buildLayers(); buildLenses();
+  render();
+  buildText();
+  /* syncKey() as well as syncLayers(), which setData() can skip because it
+     clears state.filter first. A remount keeps the filter, so the rebuilt
+     key rows and lens chips would claim nothing is pressed while paint()
+     still dims the map by it. */
+  renderPanel(); paint(); syncKey(); syncLayers(); moveCamera(true);
+}
 
 window.FieldMap = {
   open: (level, slug) => navigate(level, slug),
   select: slug => navigate(slug ? 'node' : 'overview', slug),
   clear: () => navigate('overview'),
   setData,
-  relayout: render
+  relayout: render,
+  remount
 };
 })();

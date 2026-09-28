@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { HeaderControls } from "@/components/HeaderControls";
 import { CapacityStrip } from "@/components/CapacityStrip";
 import { OrgRankRows } from "@/components/OrgRankRows";
 import { ProvenanceBox } from "@/components/ProvenanceBox";
@@ -54,6 +55,7 @@ export default async function LayerPage({
 
   return (
     <main className="fm-page fm-detail">
+      <HeaderControls />
       <Breadcrumb steps={[{ label: "Whole map", href: "/" }]} />
       <Link href={`/map/layer/${layer.slug}`} className="fm-map-link">
         See this layer on the map

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { HeaderControls } from "@/components/HeaderControls";
 import { CapacityHex } from "@/components/CapacityHex";
 import { ConnectionBox } from "@/components/ConnectionBox";
 import { HomeLine } from "@/components/HomeLine";
@@ -97,6 +98,7 @@ export default async function ProblemPage({
 
   return (
     <main className="fm-page fm-detail">
+      <HeaderControls />
       <Breadcrumb
         steps={[
           { label: "Whole map", href: "/" },

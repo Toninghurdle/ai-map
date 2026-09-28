@@ -2,7 +2,7 @@ import { AboutBanner } from "@/components/AboutBanner";
 import { FieldMapMount } from "@/components/FieldMapMount";
 import { ProblemIndex } from "@/components/ProblemIndex";
 import { SkipToMap } from "@/components/SkipToMap";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { HeaderControls } from "@/components/HeaderControls";
 import { ledeFor } from "@/lib/lede";
 import { getMapData } from "@/lib/data";
 // Written by apps/web/scripts/copy-fieldmap.mjs (predev, prebuild) from
@@ -108,7 +108,7 @@ export default async function MapLayout({ children }: { children: React.ReactNod
           <p className="fm-lede lede">{ledeFor(hasNone)}</p>
           <p className="fm-meta" id="meta" />
         </div>
-        <ThemeToggle />
+        <HeaderControls />
       </div>
       <hr className="fm-rule" />
 

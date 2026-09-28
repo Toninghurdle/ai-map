@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { ReportLink } from "@/components/ReportLink";
+import { HeaderControls } from "@/components/HeaderControls";
+import { EMAIL_DISPLAY, ReportLink } from "@/components/ReportLink";
 import { SectionHeading } from "@/components/SectionHeading";
 
 export const metadata: Metadata = {
@@ -12,12 +13,14 @@ export const metadata: Metadata = {
  * docs/about.md, "About page" section, rendered word for word (task brief
  * item 4: "Do not paraphrase, do not add or drop a sentence"). The one
  * change from the source text is the sign-off's email sentence, which goes
- * through ReportLink so the plain address never appears in the page source
- * (task brief: "render that sentence through the ReportLink mechanism").
+ * through ReportLink so the plain address never appears in the page source.
+ * The address itself comes from EMAIL_DISPLAY, the one spelling used
+ * everywhere on the site, which docs/about.md now matches.
  */
 export default function AboutPage() {
   return (
     <main className="fm-page fm-about fm-detail">
+      <HeaderControls />
       <h1>About this map</h1>
 
       <SectionHeading>Why this exists</SectionHeading>
@@ -62,7 +65,7 @@ export default function AboutPage() {
       <p>
         If something&apos;s wrong or missing, including your own organisation,{" "}
         <ReportLink subject="About page" className="fm-inline-report-link">
-          email me at Dominic_deane at yahoo dot co dot uk
+          email me at {EMAIL_DISPLAY}
         </ReportLink>
         .
       </p>

@@ -6,7 +6,7 @@
 // address, so grepping the built output for the joined string finds
 // nothing; the character code sidesteps a literal "@" sitting next to the
 // two halves in the source text.
-const USER_PARTS = ["Dominic_deane"];
+const USER_PARTS = ["dominic_deane"];
 const DOMAIN_PARTS = ["yahoo", "co", "uk"];
 const AT = String.fromCharCode(64);
 
@@ -15,17 +15,21 @@ function buildAddress(): string {
 }
 
 /**
- * "Spotted something wrong? Email Dominic_deane at yahoo dot co dot uk"
- * (docs/about.md), styled as a plain underlined link. The visible text
- * spells the address out in words, which is fine to render directly: it is
- * not the same string a mail client or a scraper would use, and reads
- * exactly as the owner's copy requires. The real `mailto:` is only built and
- * navigated to when the control is activated.
+ * How the address is written wherever it is shown: the local part, the word
+ * "at", then the domain. Not the address a mail client or a scraper would
+ * use (no "@"), so it is safe to render directly, and the real mailto: is
+ * still only assembled on click.
+ */
+export const EMAIL_DISPLAY = "dominic_deane at yahoo.co.uk";
+
+/**
+ * "Spotted something wrong? Email dominic_deane at yahoo.co.uk", styled as
+ * a plain underlined link. The real `mailto:` is only built and navigated
+ * to when the control is activated.
  *
  * `children` lets the About page render this same click-time assembly
- * inline inside the owner's own sentence ("email me at Dominic_deane at
- * yahoo dot co dot uk") without duplicating the address-building logic;
- * every other caller uses the default footer wording.
+ * inline inside the owner's own sentence without duplicating the
+ * address-building logic; every other caller uses the default wording.
  */
 export function ReportLink({
   subject,
@@ -44,7 +48,7 @@ export function ReportLink({
 
   return (
     <button type="button" className={className ?? "fm-report-link"} onClick={handleActivate}>
-      {children ?? "Spotted something wrong? Email Dominic_deane at yahoo dot co dot uk"}
+      {children ?? `Spotted something wrong? Email ${EMAIL_DISPLAY}`}
     </button>
   );
 }

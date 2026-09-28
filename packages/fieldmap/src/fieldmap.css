@@ -306,6 +306,9 @@ svg.zoomed .labels,svg.zoomed .titles{display:none}
 .pn-sib button{appearance:none;border:0;background:transparent;padding:4px 0;cursor:pointer;font-size:13.5px;color:var(--ink-2);max-width:48%;text-align:left;text-decoration:underline;text-decoration-color:var(--rule-2);text-underline-offset:3px}
 .pn-sib button:last-child{text-align:right;margin-left:auto}
 .pn-sib button:hover{color:var(--ink)}
+.pn-contact{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--rule)}
+.pn-report{appearance:none;border:0;background:transparent;padding:4px 0;cursor:pointer;font:inherit;font-size:13.5px;color:var(--ink-2);text-align:left;text-decoration:underline;text-decoration-color:var(--rule-2);text-underline-offset:3px}
+.pn-report:hover{color:var(--ink);text-decoration-color:currentColor}
 .showall{appearance:none;border:0;background:transparent;padding:6px 0 0;cursor:pointer;font-size:13.5px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
 
 /* ---------------- index ---------------- */
