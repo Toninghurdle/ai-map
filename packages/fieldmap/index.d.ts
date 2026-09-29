@@ -63,6 +63,18 @@ export interface FieldMapApi {
   setData(json: FieldMapData, orgs?: FieldMapOrgData): void;
   /** Recompute the layout. Also runs on resize and once the web font has loaded. */
   relayout(): void;
+  /**
+   * Re-attach to freshly mounted markup and redraw, keeping the loaded data
+   * and the current level.
+   *
+   * The script is a singleton that runs once and holds its elements in
+   * module state, so a single-page host that unmounts the chart and mounts
+   * it again (in Next.js, leaving the route group that owns the chart and
+   * coming back) leaves those references pointing at discarded nodes. Call
+   * this after the elements the script expects have been mounted again.
+   * Safe to call when nothing has changed.
+   */
+  remount(): void;
 }
 
 declare global {

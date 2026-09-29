@@ -19,13 +19,28 @@ export type EdgeRole = "primary" | "secondary";
 
 export type OrgStatus = "active" | "dormant" | "closed" | "unknown";
 
+/**
+ * "Who or what made it, when, how, and whether a person has verified it"
+ * (CLAUDE.md rule 4), carried by every node, org and edge. `key_agendas`
+ * items use `name` rather than `title` in the September 2026 data (unlike
+ * `canonical_reference` and `open_problems_source`), so MapReference itself
+ * is left alone and callers read both.
+ */
+export interface Provenance {
+  created_by?: string;
+  last_verified?: string;
+  reviewed_by?: string | null;
+  human_verified?: boolean;
+}
+
 export interface MapReference {
-  title: string;
+  title?: string;
+  name?: string;
   url: string;
   source_id?: string;
 }
 
-export interface MapNode {
+export interface MapNode extends Provenance {
   slug: string;
   name: string;
   definition: string;
@@ -67,7 +82,7 @@ export interface MapLayer {
   subareas: MapSubarea[];
 }
 
-export interface MapOrg {
+export interface MapOrg extends Provenance {
   org_id: string;
   name: string;
   url: string;
@@ -82,7 +97,7 @@ export interface MapOrg {
   [extra: string]: unknown;
 }
 
-export interface MapEdge {
+export interface MapEdge extends Provenance {
   org_id: string;
   node_slug: string;
   role: EdgeRole | (string & {});

@@ -74,10 +74,28 @@ export function FieldMapMount() {
       // empty state in app/(map)/layout.tsx.
       window.FIELD_MAP_OPTIONS = { hash: false, panel: true };
 
-      if (!window.FieldMap) {
+      // The script is a singleton: it runs once per page load and holds the
+      // chart's elements in module state. This component, though, mounts
+      // again whenever the reader comes back to a map route from a page
+      // outside the route group (/about, a detail page), because React
+      // unmounted the layout that owns the chart and has now mounted fresh
+      // elements with the same ids. The already-loaded script is still
+      // pointing at the discarded ones, so without remount() the new,
+      // empty svg is never drawn into and the map silently doesn't appear
+      // (reported after "/" -> /about -> Back).
+      const alreadyLoaded = Boolean(window.FieldMap);
+      if (!alreadyLoaded) {
         await loadScriptOnce();
       }
       if (cancelled) return;
+
+      if (alreadyLoaded) {
+        window.FieldMap?.remount();
+        const back = levelAndSlugFromPathname(window.location.pathname);
+        lastOpened.current = `${back.level}:${back.slug ?? ""}`;
+        window.FieldMap?.open(back.level, back.slug);
+        return;
+      }
 
       let data: FieldMapData;
       try {
@@ -111,6 +129,18 @@ export function FieldMapMount() {
       window.FieldMap?.relayout();
     }
 
+    // Restored from the browser's back/forward cache: the whole document
+    // comes back as it was, so React doesn't remount and boot() never runs
+    // again, but the layout may have been measured at a stale width.
+    // Redrawing is cheap and keeps the restored page in step.
+    function onPageShow(e: PageTransitionEvent) {
+      if (!e.persisted || !window.FieldMap) return;
+      window.FieldMap.remount();
+      const here = levelAndSlugFromPathname(window.location.pathname);
+      lastOpened.current = `${here.level}:${here.slug ?? ""}`;
+      window.FieldMap.open(here.level, here.slug);
+    }
+
     function onNavigate(e: Event) {
       const { level: newLevel, slug: newSlug } = (e as FieldMapNavigateEvent).detail;
       const key = `${newLevel}:${newSlug ?? ""}`;
@@ -131,16 +161,20 @@ export function FieldMapMount() {
     }
 
     document.addEventListener("fieldmap:navigate", onNavigate);
+    window.addEventListener("pageshow", onPageShow);
     boot();
 
     return () => {
       cancelled = true;
       document.removeEventListener("fieldmap:navigate", onNavigate);
+      window.removeEventListener("pageshow", onPageShow);
     };
-    // Runs once per page load only (see the mounting note above); level
-    // and slug changes are handled by the effect below, which reads them
-    // fresh from the URL on every render instead of being a dependency
-    // here.
+    // Runs once per mount (see the mounting note above): once per page load
+    // while the reader stays inside the map's route group, and again after
+    // a trip out to /about or a detail page, which is what remount() in
+    // boot() is for. Level and slug changes are handled by the effect
+    // below, which reads them fresh from the URL on every render instead of
+    // being a dependency here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

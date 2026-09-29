@@ -30,7 +30,7 @@ Every organisation on the map links to the source that put it there, so you can 
 
 ### Help me make it better
 
-If something's wrong or missing, including your own organisation, email me at Dominic_deane at yahoo dot co dot uk.
+If something's wrong or missing, including your own organisation, email me at dominic_deane at yahoo.co.uk.
 
 I'd especially like to hear from anyone willing to look after one part of the map over time. If it turns out to be useful, I'd like it to become something people in the field keep up to date together, with a named person for each area.
 

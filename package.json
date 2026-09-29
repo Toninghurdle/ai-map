@@ -10,6 +10,7 @@
     "build": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
     "seed:build": "node scripts/seed/build-seed.mjs",
+    "build:aliases": "node scripts/checks/build-aliases.mjs",
     "check:emdash": "node scripts/checks/no-emdash.mjs"
   }
 }

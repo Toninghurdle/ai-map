@@ -258,7 +258,10 @@ svg.zoomed .labels,svg.zoomed .titles{display:none}
 .crumbs .sep{color:var(--ink-3);padding:0 5px}
 .pn-close{appearance:none;flex:none;border:1px solid var(--ink);background:transparent;border-radius:2px;width:30px;height:30px;display:grid;place-items:center;cursor:pointer;color:var(--ink)}
 .pn-close:hover{background:var(--ink);color:var(--paper)}
-.panel h2{margin:0 0 6px;font-size:24px;line-height:1.1;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.pn-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;margin:0 0 6px}
+.panel h2{margin:0;font-size:24px;line-height:1.1;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.pn-full{font-size:13px;color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--rule-2);text-underline-offset:3px}
+.pn-full:hover{color:var(--ink);text-decoration-color:currentColor}
 .pn-role{margin:-2px 0 8px;font-style:italic;color:var(--ink-2)}
 .pn-status{display:flex;gap:9px;align-items:center;margin:4px 0 0;font-size:14.5px}
 .pn-status svg{width:20px;height:20px;overflow:visible;flex:none}
@@ -310,6 +313,9 @@ svg.zoomed .labels,svg.zoomed .titles{display:none}
 .pn-sib button{appearance:none;border:0;background:transparent;padding:4px 0;cursor:pointer;font-size:13.5px;color:var(--ink-2);max-width:48%;text-align:left;text-decoration:underline;text-decoration-color:var(--rule-2);text-underline-offset:3px}
 .pn-sib button:last-child{text-align:right;margin-left:auto}
 .pn-sib button:hover{color:var(--ink)}
+.pn-contact{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--rule)}
+.pn-report{appearance:none;border:0;background:transparent;padding:4px 0;cursor:pointer;font:inherit;font-size:13.5px;color:var(--ink-2);text-align:left;text-decoration:underline;text-decoration-color:var(--rule-2);text-underline-offset:3px}
+.pn-report:hover{color:var(--ink);text-decoration-color:currentColor}
 .showall{appearance:none;border:0;background:transparent;padding:6px 0 0;cursor:pointer;font-size:13.5px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px}
 
 /* ---------------- index ---------------- */

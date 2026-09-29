@@ -45,7 +45,6 @@ export function CapacityHex({
         strokeOpacity={0.55}
         strokeWidth={0.7}
       />
-      <title>{capacityLabel(capacity)}</title>
     </svg>
   );
 }
